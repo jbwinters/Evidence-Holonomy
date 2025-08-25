@@ -22,11 +22,16 @@ Usage:
 """
 
 import argparse
+import json
+import os
+import time
 import math
 import random
 import statistics
 from collections import defaultdict
 from typing import List, Tuple, Sequence, Dict
+import sys
+import platform
 
 import numpy as np
 
@@ -38,6 +43,63 @@ import numpy as np
 def set_seeds(seed: int) -> None:
     random.seed(seed)
     np.random.seed(seed)
+
+
+def _ensure_dir(path: str) -> None:
+    os.makedirs(path, exist_ok=True)
+
+
+def log_json(path: str, record: dict) -> None:
+    """Append a JSON record to the file at path (creates parent dirs)."""
+    _ensure_dir(os.path.dirname(path) or ".")
+    rec = dict(record)
+    if _RUN_ID is not None and "run_id" not in rec:
+        rec["run_id"] = _RUN_ID
+    rec["timestamp"] = time.time()
+    with open(path, "a") as f:
+        f.write(json.dumps(rec) + "\n")
+
+
+def log_text(path: str, text: str) -> None:
+    _ensure_dir(os.path.dirname(path) or ".")
+    with open(path, "a") as f:
+        f.write(text + ("\n" if not text.endswith("\n") else ""))
+
+
+# Global run identifier; included in all JSON logs for aggregation.
+_RUN_ID: str | None = None
+
+
+def set_run_id(run_id: str) -> None:
+    global _RUN_ID
+    _RUN_ID = str(run_id)
+
+
+def enable_line_buffering() -> None:
+    """Force line-buffered, write-through stdout/stderr so output streams under pipes/tee."""
+    try:
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(line_buffering=True, write_through=True)
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(line_buffering=True, write_through=True)
+    except Exception:
+        pass
+
+
+def _read_json_lines(path: str) -> List[dict]:
+    if not os.path.exists(path):
+        return []
+    out: List[dict] = []
+    with open(path, "r") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                out.append(json.loads(line))
+            except Exception:
+                pass
+    return out
 
 
 # ------------------------------
@@ -435,6 +497,11 @@ class UpsampleRepeat(Transform):
         return out, list(alphabet)
 
 
+class DropAll(Transform):
+    def apply(self, seq, alphabet):
+        return [], list(alphabet)
+
+
 # ------------------------------
 # KL-rate holonomy estimators
 # ------------------------------
@@ -504,6 +571,21 @@ def klrate_holonomy_time_reversal_markov(
     return klrate_between_sequences(p_eval, q_seq, k, R=R)
 
 
+def naive_evidence_diff_between_sequences(
+    p_seq: Sequence[int], q_seq: Sequence[int], k: int, R: int = 3
+) -> float:
+    """
+    Naive evidence difference: trains separate KT models on p and q and compares
+    their own self-evidences per symbol (not cross-entropy). Used for negative control.
+    Returns (H_Q(q) - H_P(p)) per symbol.
+    """
+    Pc = KTMarkovMixture(k, R=R)
+    Qc = KTMarkovMixture(k, R=R)
+    Hp = Pc.fit(p_seq) / max(1, len(p_seq))
+    Hq = Qc.fit(q_seq) / max(1, len(q_seq))
+    return float(Hq - Hp)
+
+
 # ------------------------------
 # Tests
 # ------------------------------
@@ -522,6 +604,10 @@ def test_gauge_invariance(
     loop = [P, Pinv]
     hol_rate = klrate_holonomy_general(x, alphabet, loop, k=k, R=R, align="head")
     print(f"[Gauge invariance] KL-rate holonomy (bits/step) ≈ 0: {hol_rate:.6g}")
+    log_json(
+        "results/b1_gauge.json",
+        {"seed": seed, "n": n, "k": k, "R": R, "hol_bits": float(hol_rate)},
+    )
     assert abs(hol_rate) < 5e-3, "Gauge invariance violated beyond tolerance."
 
 
@@ -542,6 +628,10 @@ def test_coarse_grain_nonneg(
     loop = [M, L]
     hol_rate = klrate_holonomy_general(x, alphabet, loop, k=4, R=R, align="head")
     print(f"[Coarse-grain] KL-rate holonomy (bits/step) >= 0: {hol_rate:.6g}")
+    log_json(
+        "results/b2_coarse.json",
+        {"seed": seed, "n": n, "k": k, "R": R, "hol_bits": float(hol_rate)},
+    )
     assert (
         hol_rate > -3e-3
     ), "Coarse-grain KL-rate holonomy should be non-negative (allowing tiny numerical slack)."
@@ -560,6 +650,20 @@ def test_time_reversal_equals_EP(
     print(
         f"[Time reversal] EP analytic={sigma_bits:.6g}  KL-rate hol={hol_rate:.6g}  "
         f"abs diff={diff:.3g}  rel diff={rel:.3%}"
+    )
+    log_json(
+        "results/b3_time_reversal.json",
+        {
+            "seed": seed,
+            "n": n,
+            "k": k,
+            "R": R,
+            "delta": delta,
+            "ep_bits": float(sigma_bits),
+            "hol_bits": float(hol_rate),
+            "abs_diff": float(diff),
+            "rel_diff": float(rel),
+        },
     )
     # tolerances: large n should give tight agreement; relax if you lower n
     assert (
@@ -584,6 +688,10 @@ def test_observer_independence_trend(seed: int = 135, k: int = 3) -> None:
     print(
         "[Observer-independence sanity] KT-LZ per-symbol evidence difference:",
         per_symbol_diffs,
+    )
+    log_json(
+        "results/b5_observer.json",
+        {"seed": seed, "k": k, "per_symbol_diffs": list(map(float, per_symbol_diffs))},
     )
     # Trend should approach a constant or shrink in magnitude; we check the last is closer to 0 than the first
     assert (
@@ -617,6 +725,21 @@ def sweep_random_chains_EP_vs_KL(
             f"  Rep {r+1}/{reps}: EP={sigma_bits:.6g}  Hol={hol_rate:.6g}  "
             f"diff={hol_rate - sigma_bits:.3g}  rel={rels[-1]:.2%}"
         )
+        log_json(
+            "results/b6_sweep_reps.json",
+            {
+                "rep": r + 1,
+                "seed": seed,
+                "n": n,
+                "k": k,
+                "R": R,
+                "delta": delta,
+                "ep_bits": float(sigma_bits),
+                "hol_bits": float(hol_rate),
+                "diff": float(hol_rate - sigma_bits),
+                "rel": float(rels[-1]),
+            },
+        )
     mean_diff = statistics.mean(diffs)
     mean_abs_diff = statistics.mean(abs(d) for d in diffs)
     sd_diff = statistics.pstdev(diffs)
@@ -626,6 +749,23 @@ def sweep_random_chains_EP_vs_KL(
     print(
         f"[Sweep] mean |diff|={mean_abs_diff:.3g}  sd(diff)={sd_diff:.3g}  mean rel={mean_rel:.2%}  "
         f"median={q50:.3g}  IQR=[{q25:.3g},{q75:.3g}]"
+    )
+    log_json(
+        "results/b6_sweep_summary.json",
+        {
+            "seed": seed,
+            "reps": reps,
+            "n": n,
+            "k": k,
+            "R": R,
+            "delta": delta,
+            "mean_abs_diff": float(mean_abs_diff),
+            "sd_diff": float(sd_diff),
+            "mean_rel": float(mean_rel),
+            "q25": float(q25),
+            "median": float(q50),
+            "q75": float(q75),
+        },
     )
     # Soft assertion: average relative error within 5%
     assert (
@@ -652,6 +792,23 @@ def test_ep_consistency_three_way(
         f"[EP 3-way] true={sigma_true:.6g}  hol={hol:.6g}  mle={sigma_mle:.6g}  "
         f"|t-h|={d_true_hol:.3g}  |t-m|={d_true_mle:.3g}  |h-m|={d_hol_mle:.3g}  rel={rel:.2%}"
     )
+    log_json(
+        "results/b4_three_way.json",
+        {
+            "seed": seed,
+            "n": n,
+            "k": k,
+            "R": R,
+            "delta": delta,
+            "ep_true": float(sigma_true),
+            "ep_hol": float(hol),
+            "ep_mle": float(sigma_mle),
+            "abs_t_h": float(d_true_hol),
+            "abs_t_m": float(d_true_mle),
+            "abs_h_m": float(d_hol_mle),
+            "rel": float(rel),
+        },
+    )
     assert (
         (d_true_hol < 5e-3 or rel < 5e-2) and d_hol_mle < 6e-3
     ), "Three-way EP consistency failed (increase n or check RNG)."
@@ -670,7 +827,233 @@ def test_temporal_coarse_grain(
     print(
         f"[Temporal coarse-grain] KL-rate holonomy (bits/step) >= 0: {hol_rate:.6g}"
     )
+    log_json(
+        "results/temporal_coarse_grain.json",
+        {"seed": seed, "n": n, "k": k, "R": R, "hol_bits": float(hol_rate)},
+    )
     assert hol_rate > -3e-3
+
+
+def test_two_state_reversible(seed: int = 222, n: int = 150000) -> None:
+    rng = np.random.default_rng(seed)
+    T = np.array([[0.9, 0.1], [0.2, 0.8]], dtype=float)
+    sigma = entropy_production_rate_bits(T)
+    x = sample_markov(T, n=n, rng=rng)
+    hol = klrate_holonomy_time_reversal_markov(x, k=2, R=3)
+    print(f"[2-state reversible] EP={sigma:.6g} Hol={hol:.6g}")
+    log_json(
+        "results/c1_two_state.json",
+        {"seed": seed, "n": n, "ep_bits": float(sigma), "hol_bits": float(hol)},
+    )
+    assert abs(sigma) < 1e-6 and abs(hol) < 5e-4
+
+
+def test_ring_closed_form(seed: int = 111, n: int = 150000, R: int = 3) -> None:
+    rng = np.random.default_rng(seed)
+    rows: List[dict] = []
+    for p, q in [(0.2, 0.05), (0.3, 0.1), (0.35, 0.05)]:
+        T = ring_chain_3(p, q)
+        x = sample_markov(T, n=n, rng=rng)
+        hol = klrate_holonomy_time_reversal_markov(x, k=3, R=R)
+        ep = ring_ep_bits(p, q)
+        diff = abs(hol - ep)
+        print(f"[Ring] p={p} q={q} EP={ep:.6g} Hol={hol:.6g} diff={diff:.3g}")
+        log_json(
+            "results/c2_ring.json",
+            {"p": p, "q": q, "ep": float(ep), "hol": float(hol), "diff": float(diff)},
+        )
+        rows.append({"p": p, "q": q, "ep": ep, "hol": hol, "diff": diff})
+        assert diff < 5e-3, "Ring EP mismatch; increase n if needed."
+    # also write CSV
+    _ensure_dir("results")
+    with open("results/c2_ring.csv", "w") as f:
+        f.write("p,q,ep_analytic,holonomy,diff\n")
+        for r in rows:
+            f.write(f"{r['p']},{r['q']},{r['ep']},{r['hol']},{r['diff']}\n")
+
+
+def test_low_EP_edge_case(seed: int = 333, n: int = 300000, k: int = 3, R: int = 3) -> None:
+    rng = np.random.default_rng(seed)
+    T = random_markov_biased(k=k, delta=0.05, rng=rng)
+    sigma = entropy_production_rate_bits(T)
+    x = sample_markov(T, n=n, rng=rng)
+    hol = klrate_holonomy_time_reversal_markov(x, k=k, R=R)
+    diff = abs(hol - sigma)
+    print(f"[Low-EP] EP={sigma:.6g} Hol={hol:.6g} diff={diff:.3g}")
+    log_json(
+        "results/d1_low_ep.json",
+        {"seed": seed, "n": n, "k": k, "R": R, "ep": float(sigma), "hol": float(hol), "diff": float(diff)},
+    )
+    if abs(sigma) < 1e-3:
+        assert diff < 5e-4
+
+
+def test_high_EP_edge_case(seed: int = 444, n: int = 150000, k: int = 3, R: int = 3) -> None:
+    rng = np.random.default_rng(seed)
+    T = random_markov_biased(k=k, delta=0.9, rng=rng)
+    sigma = entropy_production_rate_bits(T)
+    x = sample_markov(T, n=n, rng=rng)
+    hol = klrate_holonomy_time_reversal_markov(x, k=k, R=R)
+    diff = abs(hol - sigma)
+    print(f"[High-EP] EP={sigma:.6g} Hol={hol:.6g} diff={diff:.3g}")
+    log_json(
+        "results/d2_high_ep.json",
+        {"seed": seed, "n": n, "k": k, "R": R, "ep": float(sigma), "hol": float(hol), "diff": float(diff)},
+    )
+    assert diff < 1e-2
+
+
+def test_alignment_invariance(seed: int = 555, n: int = 80000, k: int = 4, R: int = 3) -> None:
+    rng = np.random.default_rng(seed)
+    T = random_markov_biased(k=k, delta=0.25, rng=rng)
+    x = sample_markov(T, n=n, rng=rng)
+    alphabet = list(range(k))
+    M = MergeSymbols({0: 0, 1: 0, 2: 1, 3: 1}, new_k=2)
+
+    class LiftBinaryTo4(Transform):
+        def apply(self, seq, alphabet):
+            return [0 if int(s) == 0 else 2 for s in seq], list(range(4))
+
+    L = LiftBinaryTo4()
+    loop = [M, L]
+    hol_head = klrate_holonomy_general(x, alphabet, loop, k=4, R=R, align="head")
+    hol_tail = klrate_holonomy_general(x, alphabet, loop, k=4, R=R, align="tail")
+    d = abs(hol_head - hol_tail)
+    print(f"[Align] head={hol_head:.6g} tail={hol_tail:.6g} diff={d:.3g}")
+    log_json(
+        "results/d3_align.json",
+        {"seed": seed, "n": n, "k": k, "R": R, "head": float(hol_head), "tail": float(hol_tail), "diff": float(d)},
+    )
+    assert d < 1e-3
+
+
+def test_segment_stability(seed: int = 666, n: int = 400000, k: int = 3, R: int = 3) -> None:
+    rng = np.random.default_rng(seed)
+    T = random_markov_biased(k=k, delta=0.6, rng=rng)
+    x = list(sample_markov(T, n=n, rng=rng))
+    alphabet = list(range(k))
+    E = TransitionEncode(k)
+    Rv = TimeReverse()
+    D2 = TransitionDecodeTakeSecond(k)
+    loop = [E, Rv, D2]
+    full = klrate_holonomy_general(x, alphabet, loop, k=k, R=R, align="head")
+    half = n // 2
+    first = klrate_holonomy_general(x[:half], alphabet, loop, k=k, R=R, align="head")
+    second = klrate_holonomy_general(x[half:], alphabet, loop, k=k, R=R, align="head")
+    print(f"[Segment] full={full:.6g} first={first:.6g} second={second:.6g}")
+    log_json(
+        "results/d4_segment.json",
+        {"seed": seed, "n": n, "k": k, "R": R, "full": float(full), "first": float(first), "second": float(second)},
+    )
+
+
+def test_mismatch_alphabet_raises(seed: int = 777, n: int = 60000, k: int = 3, R: int = 3) -> None:
+    rng = np.random.default_rng(seed)
+    T = random_markov_biased(k=k, delta=0.4, rng=rng)
+    x = sample_markov(T, n=n, rng=rng)
+    alphabet = list(range(k))
+    M = MergeSymbols({0: 0, 1: 0, 2: 1}, new_k=2)
+    try:
+        _ = klrate_holonomy_general(x, alphabet, [M], k=k, R=R, align="head")
+    except ValueError as e:
+        print(f"[Negative F1] Mismatch alphabet raised as expected: {e}")
+        log_json("results/f1_mismatch.json", {"ok": True, "error": str(e)})
+    else:
+        log_json("results/f1_mismatch.json", {"ok": False})
+        raise AssertionError("Expected ValueError due to mismatched alphabet size.")
+
+
+def test_empty_output_raises(seed: int = 888, n: int = 100, k: int = 3, R: int = 3) -> None:
+    rng = np.random.default_rng(seed)
+    T = random_markov_biased(k=k, delta=0.4, rng=rng)
+    x = sample_markov(T, n=n, rng=rng)
+    alphabet = list(range(k))
+    try:
+        _ = klrate_holonomy_general(x, alphabet, [DropAll()], k=k, R=R, align="head")
+    except ValueError as e:
+        print(f"[Negative F2] Empty output raised as expected: {e}")
+        log_json("results/f2_empty.json", {"ok": True, "error": str(e)})
+    else:
+        log_json("results/f2_empty.json", {"ok": False})
+        raise AssertionError("Expected ValueError due to empty output.")
+
+
+def test_naive_telescoping_contrast(seed: int = 999, n: int = 150000, k: int = 3, R: int = 3) -> None:
+    rng = np.random.default_rng(seed)
+    T = random_markov_biased(k=k, delta=0.6, rng=rng)
+    x = sample_markov(T, n=n, rng=rng)
+    # Time reversal naive contrast
+    E = TransitionEncode(k)
+    Rv = TimeReverse()
+    D2 = TransitionDecodeTakeSecond(k)
+    q_seq, _ = apply_loop(x, list(range(k)), [E, Rv, D2])
+    p_eval = list(x)[1:]
+    naive_tr = naive_evidence_diff_between_sequences(p_eval, q_seq, k, R=R)
+    print(f"[Naive TR] naive_diff(bits/step)≈ {naive_tr:.6g}")
+    # Coarse-grain naive contrast
+    M = MergeSymbols({0: 0, 1: 0, 2: 1}, new_k=2)
+    class Lift2to3(Transform):
+        def apply(self, seq, alphabet):
+            return [0 if int(s) == 0 else 2 for s in seq], [0, 1, 2]
+    L = Lift2to3()
+    q2, a2 = apply_loop(x, list(range(k)), [M, L])
+    naive_cg = naive_evidence_diff_between_sequences(x[: len(q2)], q2, k, R=R)
+    print(f"[Naive CG] naive_diff(bits/step)≈ {naive_cg:.6g}")
+    log_json(
+        "results/f3_naive.json",
+        {"seed": seed, "n": n, "k": k, "R": R, "naive_tr": float(naive_tr), "naive_cg": float(naive_cg)},
+    )
+    # Demonstration only: naive_tr tends to ~0 even when EP>0
+    assert abs(naive_tr) < 1e-2
+
+
+def test_bootstrap_CI(seed: int = 1234, n: int = 200000, k: int = 3, R: int = 3) -> None:
+    rng = np.random.default_rng(seed)
+    T = random_markov_biased(k=k, delta=0.6, rng=rng)
+    x = sample_markov(T, n=n, rng=rng)
+    alphabet = list(range(k))
+    loop = [TransitionEncode(k), TimeReverse(), TransitionDecodeTakeSecond(k)]
+    point = klrate_holonomy_general(x, alphabet, loop, k=k, R=R, align="head")
+    mean, lo, hi = bootstrap_klrate(x, alphabet, loop, k=k, R=R, B=200, block=2000, rng=rng)
+    sigma = entropy_production_rate_bits(T)
+    cover = (lo <= sigma <= hi)
+    print(
+        f"[Bootstrap] point={point:.6g} mean={mean:.6g} CI95=[{lo:.6g},{hi:.6g}] EP={sigma:.6g} in_CI={cover}"
+    )
+    log_json(
+        "results/e1_bootstrap.json",
+        {
+            "seed": seed,
+            "n": n,
+            "k": k,
+            "R": R,
+            "point": float(point),
+            "mean": float(mean),
+            "lo": float(lo),
+            "hi": float(hi),
+            "ep_bits": float(sigma),
+            "cover": bool(cover),
+        },
+    )
+
+
+def test_order_sweep(seed: int = 24601, n: int = 150000, k: int = 3, orders: Sequence[int] = (1, 2, 3, 5)) -> None:
+    rng = np.random.default_rng(seed)
+    T = random_markov_biased(k=k, delta=0.6, rng=rng)
+    sigma = entropy_production_rate_bits(T)
+    x = sample_markov(T, n=n, rng=rng)
+    rows = []
+    for R in orders:
+        hol = klrate_holonomy_time_reversal_markov(x, k=k, R=R)
+        diff = abs(hol - sigma)
+        rows.append({"R": R, "hol": hol, "diff": diff})
+        print(f"[Order] R={R} hol={hol:.6g} diff={diff:.3g}")
+        log_json("results/e2_order.json", {"R": R, "hol": float(hol), "diff": float(diff)})
+    _ensure_dir("results")
+    with open("results/e2_order_sweep.csv", "w") as f:
+        f.write("R,holonomy,diff\n")
+        for r in rows:
+            f.write(f"{r['R']},{r['hol']},{r['diff']}\n")
 
 
 # ------------------------------
@@ -701,6 +1084,25 @@ def sample_HMM(
     return obs, k, m
 
 
+def ring_chain_3(p: float, q: float) -> np.ndarray:
+    """3-state ring with forward p, backward q, stay 1-p-q (mod 3)."""
+    assert 0 < p < 1 and 0 < q < 1 and p + q < 1
+    T = np.array(
+        [
+            [1 - p - q, p, q],
+            [q, 1 - p - q, p],
+            [p, q, 1 - p - q],
+        ],
+        dtype=float,
+    )
+    return _row_stochastic(T)
+
+
+def ring_ep_bits(p: float, q: float) -> float:
+    """Analytic EP for the 3-state ring with uniform stationary distribution."""
+    return p * math.log(p / q, 2.0) + q * math.log(q / p, 2.0)
+
+
 def demo_hmm_coarse_grain(seed: int = 8642, n: int = 60000) -> None:
     rng = np.random.default_rng(seed)
     A = random_markov_biased(2, delta=0.5, rng=rng)
@@ -717,6 +1119,10 @@ def demo_hmm_coarse_grain(seed: int = 8642, n: int = 60000) -> None:
     loop = [M, L]
     hol_rate = klrate_holonomy_general(obs, alphabet, loop, k=3, R=3, align="head")
     print(f"[HMM demo] Coarse-grain KL-rate holonomy (bits/step) >= 0: {hol_rate:.6g}")
+    log_json(
+        "results/optional_hmm.json",
+        {"seed": seed, "n": n, "hol_bits": float(hol_rate)},
+    )
 
 
 def demo_measurement_record(seed: int = 9753, n: int = 80000) -> None:
@@ -731,6 +1137,16 @@ def demo_measurement_record(seed: int = 9753, n: int = 80000) -> None:
     print(
         f"[Measurement record] EP analytic={sigma_bits:.6g}  KL-rate hol={hol_rate:.6g}  "
         f"abs diff={abs(hol_rate - sigma_bits):.3g}"
+    )
+    log_json(
+        "results/optional_measurement_2state.json",
+        {
+            "seed": seed,
+            "n": n,
+            "ep_bits": float(sigma_bits),
+            "hol_bits": float(hol_rate),
+            "abs_diff": float(abs(hol_rate - sigma_bits)),
+        },
     )
 
 
@@ -753,8 +1169,124 @@ def demo_measurement_record_3state(seed: int = 97531, n: int = 80000) -> None:
         f"[3-state record] EP analytic={sigma_bits:.6g}  KL-rate hol={hol_rate:.6g}  "
         f"diff={abs(hol_rate - sigma_bits):.3g}"
     )
+    log_json(
+        "results/optional_measurement_3state.json",
+        {
+            "seed": seed,
+            "n": n,
+            "ep_bits": float(sigma_bits),
+            "hol_bits": float(hol_rate),
+            "abs_diff": float(abs(hol_rate - sigma_bits)),
+        },
+    )
 
 
+# ------------------------------
+# Suite helpers (env, bootstrap)
+# ------------------------------
+
+
+def log_environment() -> None:
+    info = {
+        "python_version": sys.version,
+        "platform": platform.platform(),
+        "numpy_version": np.__version__,
+    }
+    _ensure_dir("results")
+    with open("results/env.txt", "w") as f:
+        f.write(f"Python: {info['python_version']}\n")
+        f.write(f"Platform: {info['platform']}\n")
+        f.write(f"NumPy: {info['numpy_version']}\n")
+    log_json("results/env.json", info)
+
+
+def write_run_summary(args) -> None:
+    """Aggregate key results for the current run_id into results/summary.json (JSONL)."""
+    run_id = _RUN_ID
+    def last_with_id(path: str):
+        recs = [r for r in _read_json_lines(path) if r.get("run_id") == run_id]
+        return recs[-1] if recs else None
+
+    summary = {
+        "run_id": run_id,
+        "config": {
+            "seed": args.seed,
+            "n": args.n,
+            "k": args.k,
+            "order": args.order,
+            "sweep_reps": args.sweep_reps,
+            "fast": bool(args.fast),
+            "long": bool(args.long),
+            "run_optional": bool(args.run_optional),
+            "run_suite": bool(args.run_suite),
+        },
+        "env": last_with_id("results/env.json"),
+        "core": {
+            "gauge": last_with_id("results/b1_gauge.json"),
+            "coarse": last_with_id("results/b2_coarse.json"),
+            "time_reversal": last_with_id("results/b3_time_reversal.json"),
+            "three_way": last_with_id("results/b4_three_way.json"),
+            "observer": last_with_id("results/b5_observer.json"),
+            "sweep": last_with_id("results/b6_sweep_summary.json"),
+        },
+        "deterministic": {
+            "two_state": last_with_id("results/c1_two_state.json"),
+            "ring": last_with_id("results/c2_ring.json"),
+        },
+        "robustness": {
+            "low_ep": last_with_id("results/d1_low_ep.json"),
+            "high_ep": last_with_id("results/d2_high_ep.json"),
+            "align": last_with_id("results/d3_align.json"),
+            "segment": last_with_id("results/d4_segment.json"),
+        },
+        "stats": {
+            "bootstrap": last_with_id("results/e1_bootstrap.json"),
+            "order": last_with_id("results/e2_order.json"),
+        },
+        "negative": {
+            "mismatch": last_with_id("results/f1_mismatch.json"),
+            "empty": last_with_id("results/f2_empty.json"),
+            "naive": last_with_id("results/f3_naive.json"),
+        },
+        "optional": {
+            "hmm": last_with_id("results/optional_hmm.json"),
+            "measurement_2": last_with_id("results/optional_measurement_2state.json"),
+            "measurement_3": last_with_id("results/optional_measurement_3state.json"),
+            "temporal_coarse": last_with_id("results/temporal_coarse_grain.json"),
+        },
+    }
+    log_json("results/summary.json", summary)
+
+
+def bootstrap_klrate(
+    seq: Sequence[int],
+    alphabet: Sequence[int],
+    loop: List[Transform],
+    k: int,
+    R: int = 3,
+    B: int = 200,
+    block: int = 2000,
+    rng: np.random.Generator = None,
+) -> Tuple[float, float, float]:
+    if rng is None:
+        rng = np.random.default_rng()
+    n = len(seq)
+    # Create non-overlapping blocks
+    starts = list(range(0, max(1, n - block + 1), block))
+    blocks = [list(seq)[s : s + block] for s in starts]
+    vals: List[float] = []
+    for _ in range(B):
+        sample: List[int] = []
+        while len(sample) < n:
+            sample.extend(blocks[int(rng.integers(0, len(blocks)))] if blocks else [])
+            if not blocks:  # fallback if block > n
+                sample = list(seq)
+                break
+        sample = sample[:n]
+        val = klrate_holonomy_general(sample, alphabet, loop, k, R=R, align="head")
+        vals.append(val)
+    arr = np.array(vals, dtype=float)
+    return float(np.mean(arr)), float(np.percentile(arr, 2.5)), float(np.percentile(arr, 97.5))
 # ------------------------------
 # Main driver
 # ------------------------------
@@ -781,59 +1313,108 @@ def main():
         action="store_true",
         help="Fast mode: shorter sequences and fewer reps for quick sanity checks.",
     )
+    parser.add_argument(
+        "--run_suite",
+        action="store_true",
+        help="Run the full evaluation suite and write artifacts to results/.",
+    )
+    parser.add_argument(
+        "--long",
+        action="store_true",
+        help="Long mode: use longer n for select tests (3-way EP, sweep).",
+    )
     args = parser.parse_args()
 
     set_seeds(args.seed)
+    enable_line_buffering()
+    # Generate and set a run identifier for this process
+    run_id = f"run-{int(time.time()*1000)}-{random.randint(0, 1_000_000)}"
+    set_run_id(run_id)
 
     print("\n=== UEC Battery: starting ===")
     if args.fast:
         # Reduce workloads for quicker dev cycles
         args.n = max(60000, args.n // 3)
         args.sweep_reps = max(3, args.sweep_reps // 2)
-    # 1) Gauge invariance (bijective loop ⇒ 0)
-    test_gauge_invariance(
-        seed=args.seed + 1, n=max(60000, args.n // 2), k=max(3, args.k), R=args.order
-    )
-
-    # 2) Coarse-graining (≥ 0)
-    test_coarse_grain_nonneg(
-        seed=args.seed + 2,
-        n=max(80000, args.n // 2),
-        k=max(4, args.k + 1),
-        R=args.order,
-    )
-
-    # 3) Time reversal (≈ EP)
-    test_time_reversal_equals_EP(
-        seed=args.seed + 3, n=args.n, k=args.k, R=args.order, delta=0.6
-    )
-    test_ep_consistency_three_way(
-        seed=args.seed + 30, n=args.n, k=args.k, R=args.order, delta=0.6
-    )
-
-    # 4) Observer-independence sanity (KT vs LZ evidence difference per symbol shrinks)
-    test_observer_independence_trend(seed=args.seed + 4, k=args.k)
-
-    # 5) Random-chain sweep aggregate statistics
-    sweep_random_chains_EP_vs_KL(
-        seed=args.seed + 5,
-        reps=args.sweep_reps,
-        n=max(120000, args.n // 2),
-        k=args.k,
-        delta=0.6,
-        R=args.order,
-    )
-
-    # Optional demos
-    if args.run_optional:
-        demo_hmm_coarse_grain(seed=args.seed + 6, n=max(60000, args.n // 2))
-        demo_measurement_record(seed=args.seed + 7, n=max(80000, args.n // 2))
-        demo_measurement_record_3state(
-            seed=args.seed + 8, n=max(80000, args.n // 2)
+    def run_core():
+        # 1) Gauge invariance (bijective loop ⇒ 0)
+        test_gauge_invariance(
+            seed=args.seed + 1,
+            n=max(60000, args.n // 2),
+            k=max(3, args.k),
+            R=args.order,
         )
-        test_temporal_coarse_grain(
-            seed=args.seed + 9, n=max(80000, args.n // 2), k=args.k, R=args.order
+
+        # 2) Coarse-graining (≥ 0)
+        test_coarse_grain_nonneg(
+            seed=args.seed + 2,
+            n=max(80000, args.n // 2),
+            k=max(4, args.k + 1),
+            R=args.order,
         )
+
+        # 3) Time reversal (≈ EP) and three-way EP
+        test_time_reversal_equals_EP(
+            seed=args.seed + 3, n=args.n, k=args.k, R=args.order, delta=0.6
+        )
+        n_three_way = max(300000, args.n) if args.long else args.n
+        test_ep_consistency_three_way(
+            seed=args.seed + 30, n=n_three_way, k=args.k, R=args.order, delta=0.6
+        )
+
+        # 4) Observer-independence sanity (KT vs LZ evidence difference per symbol shrinks)
+        test_observer_independence_trend(seed=args.seed + 4, k=args.k)
+
+        # 5) Random-chain sweep aggregate statistics
+        reps_sweep = max(10, args.sweep_reps) if args.long else args.sweep_reps
+        n_sweep = max(200000, args.n // 2) if args.long else max(120000, args.n // 2)
+        sweep_random_chains_EP_vs_KL(
+            seed=args.seed + 5,
+            reps=reps_sweep,
+            n=n_sweep,
+            k=args.k,
+            delta=0.6,
+            R=args.order,
+        )
+
+        # Optional demos
+        if args.run_optional:
+            demo_hmm_coarse_grain(seed=args.seed + 6, n=max(60000, args.n // 2))
+            demo_measurement_record(seed=args.seed + 7, n=max(80000, args.n // 2))
+            demo_measurement_record_3state(
+                seed=args.seed + 8, n=max(80000, args.n // 2)
+            )
+            test_temporal_coarse_grain(
+                seed=args.seed + 9, n=max(80000, args.n // 2), k=args.k, R=args.order
+            )
+
+    def run_suite():
+        log_environment()
+        run_core()
+        # Deterministic checks
+        test_two_state_reversible(seed=args.seed + 10, n=args.n)
+        test_ring_closed_form(seed=args.seed + 11, n=max(150000, args.n // 2), R=args.order)
+        # Robustness & stress
+        test_low_EP_edge_case(seed=args.seed + 12, n=max(300000, args.n), k=args.k, R=args.order)
+        test_high_EP_edge_case(seed=args.seed + 13, n=args.n, k=args.k, R=args.order)
+        test_alignment_invariance(seed=args.seed + 14)
+        test_segment_stability(seed=args.seed + 15)
+        # Statistical characterization
+        test_bootstrap_CI(seed=args.seed + 16, n=max(200000, args.n // 2), k=args.k, R=args.order)
+        test_order_sweep(seed=args.seed + 17, n=args.n, k=args.k, orders=(1, 2, 3, 5))
+        # Negative controls
+        test_mismatch_alphabet_raises(seed=args.seed + 18)
+        test_empty_output_raises(seed=args.seed + 19)
+        test_naive_telescoping_contrast(seed=args.seed + 20, n=args.n, k=args.k, R=args.order)
+
+    if args.run_suite:
+        run_suite()
+    else:
+        run_core()
+
+    # Aggregate and write a single summary record for this run
+    write_run_summary(args)
+    print(f"Summary written to results/summary.json (run_id={run_id})")
 
     print("=== UEC Battery: all tests completed successfully ===")
 
