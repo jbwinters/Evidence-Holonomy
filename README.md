@@ -71,4 +71,4 @@ CI: GitHub Actions runs tests on 3.9–3.11. Publishing to PyPI happens on relea
 
 ## License
 
-See repository licensing or contact the author.
+Code is licensed under MIT. Text, figures, and conceptual content are licensed under CC-BY 4.0 — please cite when reusing.
