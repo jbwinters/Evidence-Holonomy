@@ -1418,10 +1418,25 @@ def aot_from_series(
     B: int = 200,
     block_wins: int = 10,
     rng: np.random.Generator = None,
+    use_diff: bool = False,
+    use_logreturn: bool = False,
 ) -> dict:
     if rng is None:
         rng = np.random.default_rng()
-    s = discretize_series(np.asarray(x_raw, dtype=float), k)
+    x_arr = np.asarray(x_raw, dtype=float)
+    if use_logreturn:
+        # Safe log-returns: drop non-positive entries; fallback to finite differences if needed
+        x_arr = x_arr[np.isfinite(x_arr)]
+        # add small epsilon to avoid log(0)
+        eps = 1e-12
+        x_arr = x_arr[x_arr > 0]
+        if len(x_arr) >= 2:
+            x_arr = np.diff(np.log(x_arr + eps), prepend=np.log(x_arr[0] + eps))
+        else:
+            x_arr = np.diff(x_arr, prepend=x_arr[:1])
+    elif use_diff:
+        x_arr = np.diff(x_arr, prepend=x_arr[:1])
+    s = discretize_series(x_arr, k)
     n = len(s)
     ntr = int(n * train_frac)
     train, test = s[:ntr], s[ntr:]
@@ -1429,9 +1444,11 @@ def aot_from_series(
         raise ValueError("Not enough test data for the chosen window size.")
     Pf, Qf = train_forward_and_reverse_models(train, k, R)
     wins_fwd = window_iter(test, win, stride)
-    wins_rev = [w[::-1] for w in wins_fwd]
+    # Use loop-reversed negatives consistent with how Qf was trained
+    E_win, Rv_win, D2_win = TransitionEncode(k), TimeReverse(), TransitionDecodeTakeSecond(k)
+    wins_q = [apply_loop(w, list(range(k)), [E_win, Rv_win, D2_win])[0] for w in wins_fwd]
     scores_fwd = np.array([signed_lr_score(w, Pf, Qf) for w in wins_fwd], dtype=float)
-    scores_rev = np.array([signed_lr_score(w, Pf, Qf) for w in wins_rev], dtype=float)
+    scores_rev = np.array([signed_lr_score(wq, Pf, Qf) for wq in wins_q], dtype=float)
     auc = auc_from_scores(scores_fwd, scores_rev)
     # KL-rate holonomy on held-out test
     hol_rate = klrate_holonomy_time_reversal_markov(test, k=k, R=R)
@@ -1539,6 +1556,19 @@ def main():
     parser.add_argument(
         "--scoreboard_glob", type=str, help="Glob pattern of CSV/WAV files for scoreboard."
     )
+    parser.add_argument(
+        "--aot_diff", action="store_true", help="Use first-difference preprocessing for AoT."
+    )
+    parser.add_argument(
+        "--aot_logreturn",
+        action="store_true",
+        help="Use log-returns preprocessing for AoT (CSV finance).",
+    )
+    parser.add_argument(
+        "--aot_rate",
+        type=float,
+        help="Sampling rate (Hz) for CSV AoT (used to report bits/s).",
+    )
     args = parser.parse_args()
 
     set_seeds(args.seed)
@@ -1642,9 +1672,11 @@ def main():
                 x,
                 k=args.aot_bins,
                 R=args.order,
-                sr=None,
+                sr=int(args.aot_rate) if getattr(args, "aot_rate", None) else None,
                 win=args.aot_win,
                 stride=args.aot_stride,
+                use_diff=bool(args.aot_diff),
+                use_logreturn=bool(args.aot_logreturn),
             )
             print(
                 f"[AoT CSV] AUC={res['auc']:.3f}  bits/step={res['bits_per_step']:.6g}  "
@@ -1664,6 +1696,8 @@ def main():
                 sr=sr,
                 win=args.aot_win,
                 stride=args.aot_stride,
+                use_diff=bool(args.aot_diff),
+                use_logreturn=False,
             )
             bps = res["bits_per_second"]
             print(
@@ -1691,6 +1725,8 @@ def main():
                         sr=sr,
                         win=args.aot_win,
                         stride=args.aot_stride,
+                        use_diff=bool(args.aot_diff),
+                        use_logreturn=False,
                     )
                 elif path.lower().endswith(".csv"):
                     x = load_csv_column(path, column=args.aot_csv_col)
@@ -1698,9 +1734,11 @@ def main():
                         x,
                         k=args.aot_bins,
                         R=args.order,
-                        sr=None,
+                        sr=int(args.aot_rate) if getattr(args, "aot_rate", None) else None,
                         win=args.aot_win,
                         stride=args.aot_stride,
+                        use_diff=bool(args.aot_diff),
+                        use_logreturn=bool(args.aot_logreturn),
                     )
                 else:
                     continue
