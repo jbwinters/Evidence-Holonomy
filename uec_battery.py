@@ -1254,6 +1254,11 @@ def write_run_summary(args) -> None:
             "measurement_3": last_with_id("results/optional_measurement_3state.json"),
             "temporal_coarse": last_with_id("results/temporal_coarse_grain.json"),
         },
+        "aot": {
+            "csv": last_with_id("results/aot_csv.json"),
+            "wav": last_with_id("results/aot_wav.json"),
+            "scoreboard_last": last_with_id("results/scoreboard.json"),
+        },
     }
     log_json("results/summary.json", summary)
 
@@ -1287,6 +1292,196 @@ def bootstrap_klrate(
         vals.append(val)
     arr = np.array(vals, dtype=float)
     return float(np.mean(arr)), float(np.percentile(arr, 2.5)), float(np.percentile(arr, 97.5))
+
+
+# ------------------------------
+# AoT demos: quantization, I/O, scoring, scoreboard
+# ------------------------------
+
+
+def quantile_bins(x: np.ndarray, k: int) -> np.ndarray:
+    qs = np.linspace(0.0, 1.0, k + 1)
+    edges = np.quantile(x, qs)
+    # guard identical edges by ensuring strict monotonicity
+    for i in range(1, len(edges)):
+        if edges[i] <= edges[i - 1]:
+            edges[i] = edges[i - 1] + 1e-12
+    return edges
+
+
+def discretize_series(x: np.ndarray, k: int) -> np.ndarray:
+    edges = quantile_bins(x, k)
+    s = np.clip(np.digitize(x, edges[1:-1], right=False), 0, k - 1)
+    return s.astype(int)
+
+
+def load_csv_column(path: str, column: str | int = 0, skip_header: bool = True) -> np.ndarray:
+    if skip_header:
+        data = np.genfromtxt(path, delimiter=",", names=True, dtype=None, encoding=None)
+        if isinstance(column, str):
+            if column not in data.dtype.names:
+                raise ValueError(f"Column '{column}' not found in CSV header.")
+            x = np.asarray(data[column], dtype=float)
+        else:
+            cols = list(data.dtype.names)
+            x = np.asarray(data[cols[int(column)]], dtype=float)
+    else:
+        arr = np.genfromtxt(path, delimiter=",", dtype=float)
+        x = arr[:, int(column)] if arr.ndim == 2 else arr
+    x = np.asarray(x, dtype=float)
+    x = x[np.isfinite(x)]
+    return x
+
+
+def load_wav_mono(path: str) -> Tuple[np.ndarray, int]:
+    try:
+        from scipy.io import wavfile  # type: ignore
+
+        sr, wav = wavfile.read(path)
+        wav = np.asarray(wav)
+        if wav.ndim > 1:
+            wav = wav.mean(axis=1)
+        x = wav.astype(float)
+        x = (x - x.mean()) / (x.std() + 1e-12)
+        return x, int(sr)
+    except Exception:
+        import wave
+        import struct
+
+        with wave.open(path, "rb") as wf:
+            nchan = wf.getnchannels()
+            fr = wf.getframerate()
+            nframes = wf.getnframes()
+            raw = wf.readframes(nframes)
+        # assume 16-bit PCM
+        vals = np.array(struct.unpack("<" + "h" * (len(raw) // 2), raw), dtype=float)
+        if nchan > 1:
+            vals = vals.reshape(-1, nchan).mean(axis=1)
+        x = (vals - vals.mean()) / (vals.std() + 1e-12)
+        return x, int(fr)
+
+
+def auc_from_scores(pos: np.ndarray, neg: np.ndarray) -> float:
+    x = np.concatenate([pos, neg])
+    y = np.concatenate([np.ones_like(pos), np.zeros_like(neg)])
+    # ranks 1..N via argsort-of-argsort; approximate ties handling
+    order = np.argsort(x, kind="mergesort")
+    ranks = np.empty_like(order, dtype=float)
+    ranks[order] = np.arange(1, len(x) + 1, dtype=float)
+    R1 = ranks[y == 1].sum()
+    n1 = float((y == 1).sum())
+    n0 = float((y == 0).sum())
+    return float((R1 - n1 * (n1 + 1) / 2.0) / max(n1 * n0, 1e-12))
+
+
+def window_iter(seq: Sequence[int], win: int, stride: int) -> List[List[int]]:
+    out: List[List[int]] = []
+    n = len(seq)
+    for start in range(0, max(1, n - win + 1), stride):
+        out.append(list(seq[start : start + win]))
+    return out
+
+
+def train_forward_and_reverse_models(
+    train_seq: Sequence[int], k: int, R: int
+) -> Tuple["KTFrozenPredictor", "KTFrozenPredictor"]:
+    P = KTMarkovMixture(k, R=R)
+    P.fit(train_seq)
+    Pf = P.snapshot_frozen()
+    E = TransitionEncode(k)
+    Rv = TimeReverse()
+    D2 = TransitionDecodeTakeSecond(k)
+    q_train, _ = apply_loop(train_seq, list(range(k)), [E, Rv, D2])
+    Q = KTMarkovMixture(k, R=R)
+    Q.fit(q_train)
+    Qf = Q.snapshot_frozen()
+    return Pf, Qf
+
+
+def signed_lr_score(
+    seq: Sequence[int], Pf: "KTFrozenPredictor", Qf: "KTFrozenPredictor"
+) -> float:
+    n = max(1, len(seq))
+    HQ = Qf.codelen_sequence(seq) / n
+    HP = Pf.codelen_sequence(seq) / n
+    return float(HQ - HP)
+
+
+def aot_from_series(
+    x_raw: np.ndarray,
+    k: int = 8,
+    R: int = 3,
+    sr: int | None = None,
+    train_frac: float = 0.5,
+    win: int = 4096,
+    stride: int = 2048,
+    B: int = 200,
+    block_wins: int = 10,
+    rng: np.random.Generator = None,
+) -> dict:
+    if rng is None:
+        rng = np.random.default_rng()
+    s = discretize_series(np.asarray(x_raw, dtype=float), k)
+    n = len(s)
+    ntr = int(n * train_frac)
+    train, test = s[:ntr], s[ntr:]
+    if len(test) < win * 4:
+        raise ValueError("Not enough test data for the chosen window size.")
+    Pf, Qf = train_forward_and_reverse_models(train, k, R)
+    wins_fwd = window_iter(test, win, stride)
+    wins_rev = [w[::-1] for w in wins_fwd]
+    scores_fwd = np.array([signed_lr_score(w, Pf, Qf) for w in wins_fwd], dtype=float)
+    scores_rev = np.array([signed_lr_score(w, Pf, Qf) for w in wins_rev], dtype=float)
+    auc = auc_from_scores(scores_fwd, scores_rev)
+    # KL-rate holonomy on held-out test
+    hol_rate = klrate_holonomy_time_reversal_markov(test, k=k, R=R)
+    # Window-level hol estimates, bootstrap CI over blocks
+    vals: List[float] = []
+    E = TransitionEncode(k)
+    Rv = TimeReverse()
+    D2 = TransitionDecodeTakeSecond(k)
+    for w in wins_fwd:
+        qw, _ = apply_loop(w, list(range(k)), [E, Rv, D2])
+        if len(w) > 1 and len(qw) > 0:
+            vals.append(klrate_between_sequences(w[1:], qw, k, R))
+    if len(vals) == 0:
+        mean = hol_rate
+        lo = hol_rate
+        hi = hol_rate
+    else:
+        arr = np.array(vals, dtype=float)
+        block = max(1, int(block_wins))
+        blocks = [arr[i : i + block].mean() for i in range(0, len(arr) - block + 1, block)]
+        if len(blocks) < 2:
+            mean = float(np.mean(arr))
+            lo = float(np.min(arr))
+            hi = float(np.max(arr))
+        else:
+            boot: List[float] = []
+            for _ in range(B):
+                smp = [blocks[int(rng.integers(0, len(blocks)))] for __ in range(len(blocks))]
+                boot.append(float(np.mean(smp)))
+            mean = float(np.mean(boot))
+            lo = float(np.percentile(boot, 2.5))
+            hi = float(np.percentile(boot, 97.5))
+    bits_per_step = float(hol_rate)
+    bits_per_second = (bits_per_step * sr) if sr is not None else None
+    return {
+        "k": int(k),
+        "R": int(R),
+        "win": int(win),
+        "stride": int(stride),
+        "auc": float(auc),
+        "scores_forward": scores_fwd.tolist(),
+        "scores_reversed": scores_rev.tolist(),
+        "bits_per_step": bits_per_step,
+        "bits_per_second": (float(bits_per_second) if bits_per_second is not None else None),
+        "hol_ci_mean": float(mean),
+        "hol_ci_lo": float(lo),
+        "hol_ci_hi": float(hi),
+        "n_train": int(ntr),
+        "n_test": int(len(test)),
+    }
 # ------------------------------
 # Main driver
 # ------------------------------
@@ -1322,6 +1517,27 @@ def main():
         "--long",
         action="store_true",
         help="Long mode: use longer n for select tests (3-way EP, sweep).",
+    )
+    # AoT / Scoreboard demo flags
+    parser.add_argument("--aot_csv", type=str, help="Path to a CSV time-series file.")
+    parser.add_argument(
+        "--aot_csv_col",
+        type=str,
+        default="0",
+        help="CSV column name (header) or index for the time-series column.",
+    )
+    parser.add_argument("--aot_wav", type=str, help="Path to a WAV audio file.")
+    parser.add_argument(
+        "--aot_bins", type=int, default=8, help="Quantization bins (alphabet size k)."
+    )
+    parser.add_argument(
+        "--aot_win", type=int, default=4096, help="AoT window length (samples)."
+    )
+    parser.add_argument(
+        "--aot_stride", type=int, default=2048, help="AoT stride (samples)."
+    )
+    parser.add_argument(
+        "--scoreboard_glob", type=str, help="Glob pattern of CSV/WAV files for scoreboard."
     )
     args = parser.parse_args()
 
@@ -1413,6 +1629,106 @@ def main():
         run_core()
 
     # Aggregate and write a single summary record for this run
+    # --- AoT single-file modes ---
+    if getattr(args, "aot_csv", None):
+        col = args.aot_csv_col
+        try:
+            col = int(col)
+        except Exception:
+            pass
+        try:
+            x = load_csv_column(args.aot_csv, column=col)
+            res = aot_from_series(
+                x,
+                k=args.aot_bins,
+                R=args.order,
+                sr=None,
+                win=args.aot_win,
+                stride=args.aot_stride,
+            )
+            print(
+                f"[AoT CSV] AUC={res['auc']:.3f}  bits/step={res['bits_per_step']:.6g}  "
+                f"CI=[{res['hol_ci_lo']:.6g},{res['hol_ci_hi']:.6g}]"
+            )
+            log_json("results/aot_csv.json", {"file": args.aot_csv, **res})
+        except Exception as e:
+            print(f"[AoT CSV] Failed: {e}")
+
+    if getattr(args, "aot_wav", None):
+        try:
+            x, sr = load_wav_mono(args.aot_wav)
+            res = aot_from_series(
+                x,
+                k=args.aot_bins,
+                R=args.order,
+                sr=sr,
+                win=args.aot_win,
+                stride=args.aot_stride,
+            )
+            bps = res["bits_per_second"]
+            print(
+                f"[AoT WAV] AUC={res['auc']:.3f}  bits/step={res['bits_per_step']:.6g}  "
+                f"bits/s={bps if bps is not None else 'NA'}  "
+                f"CI=[{res['hol_ci_lo']:.6g},{res['hol_ci_hi']:.6g}]  sr={sr}Hz"
+            )
+            log_json("results/aot_wav.json", {"file": args.aot_wav, **res})
+        except Exception as e:
+            print(f"[AoT WAV] Failed: {e}")
+
+    # --- Scoreboard mode (folder/glob) ---
+    if getattr(args, "scoreboard_glob", None):
+        import glob
+
+        rows = []
+        for path in glob.glob(args.scoreboard_glob):
+            try:
+                if path.lower().endswith(".wav"):
+                    x, sr = load_wav_mono(path)
+                    res = aot_from_series(
+                        x,
+                        k=args.aot_bins,
+                        R=args.order,
+                        sr=sr,
+                        win=args.aot_win,
+                        stride=args.aot_stride,
+                    )
+                elif path.lower().endswith(".csv"):
+                    x = load_csv_column(path, column=args.aot_csv_col)
+                    res = aot_from_series(
+                        x,
+                        k=args.aot_bins,
+                        R=args.order,
+                        sr=None,
+                        win=args.aot_win,
+                        stride=args.aot_stride,
+                    )
+                else:
+                    continue
+                row = {
+                    "file": path,
+                    "auc": res["auc"],
+                    "bits_per_step": res["bits_per_step"],
+                    "bits_per_second": res["bits_per_second"],
+                    "ci_lo": res["hol_ci_lo"],
+                    "ci_hi": res["hol_ci_hi"],
+                }
+                rows.append(row)
+                log_json("results/scoreboard.json", row)
+                print(
+                    f"[Scoreboard] {os.path.basename(path)}  AUC={row['auc']:.3f}  "
+                    f"b/step={row['bits_per_step']:.4g}  b/s={row['bits_per_second']}"
+                )
+            except Exception as e:
+                print(f"[Scoreboard] Skipped {path}: {e}")
+        if rows:
+            _ensure_dir("results")
+            with open("results/scoreboard.csv", "w") as f:
+                f.write("file,auc,bits_per_step,bits_per_second,ci_lo,ci_hi\n")
+                for r in rows:
+                    f.write(
+                        f"{r['file']},{r['auc']},{r['bits_per_step']},{r['bits_per_second']},{r['ci_lo']},{r['ci_hi']}\n"
+                    )
+
     write_run_summary(args)
     print(f"Summary written to results/summary.json (run_id={run_id})")
 
