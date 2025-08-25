@@ -267,3 +267,271 @@ T. Cover and J. A. Thomas, \emph{Elements of Information Theory}, Wiley.
 \end{thebibliography}
 
 \end{document}
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm,mathtools,bbm}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{thmtools}
+\usepackage{bm}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  citecolor=blue,
+  urlcolor=blue
+}
+
+\declaretheorem[name=Theorem,numberwithin=section]{theorem}
+\declaretheorem[name=Proposition,sibling=theorem]{proposition}
+\declaretheorem[name=Lemma,sibling=theorem]{lemma}
+\declaretheorem[name=Corollary,sibling=theorem]{corollary}
+\declaretheorem[name=Definition,style=definition,numberwithin=section]{definition}
+\declaretheorem[name=Remark,style=remark,sibling=theorem]{remark}
+
+\newcommand{\X}{\mathcal{X}}
+\newcommand{\Y}{\mathcal{Y}}
+\newcommand{\Z}{\mathcal{Z}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\1}{\mathbbm{1}}
+\newcommand{\KL}{\mathrm{D}}
+\newcommand{\bits}{\;\mathrm{bits}}
+\newcommand{\nats}{\;\mathrm{nats}}
+\newcommand{\law}{\mathcal{L}}
+\newcommand{\code}{\mathcal{E}}
+\newcommand{\codelen}{\mathsf{L}}
+\newcommand{\push}{\#}
+\newcommand{\RR}{\mathbb{R}}
+
+\title{Evidence Holonomy and Entropy Production:\\
+From Universal Coding to Irreversibility}
+\author{}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We formalize an ``evidence holonomy'' functional on loops of representation transforms applied to sample paths. Using pointwise universality of code lengths for stationary ergodic processes, we prove two complementary reductions:
+(i) \emph{representation-space holonomy} (measuring evidence in the final representation reached by the loop) converges, up to $o(n)$, to the entropy-rate difference $h(Q)-h(P)$; (ii) \emph{KL holonomy} with \emph{observer transport} (measuring the forward path under a code universal for the pushforward law) converges to the \emph{relative entropy rate} $\mathsf{d}(P\|Q)$. As corollaries we obtain: gauge invariance for bijective loops; non-negativity for channel-based loops in the KL sense; and, for finite-state Markov chains under a canonical time-reversal loop, equality between holonomy rate and the \emph{entropy production rate}. We also show observer-independence of the holonomy rate across universal coders. A companion battery of numerical tests validates these statements.
+\end{abstract}
+
+\section{Setup and Definitions}
+
+\paragraph{Alphabet and path space.} Fix a finite alphabet $\X$. Let $\X^n$ denote length-$n$ strings and $\X^{\N}$ the one-sided sequence space with its product $\sigma$-algebra. Let $P$ be a stationary ergodic probability measure on $(\X^{\N},\mathcal{F})$. Write $X_{0:n-1}$ for the length-$n$ prefix of a sample from $P$ and $P_n$ for its law on $\X^n$.
+
+\paragraph{Universal codes.}
+A \emph{universal code} on alphabet $\mathcal{A}$ is a map $\code_{\mathcal{A}}:\bigcup_{n\ge 1}\mathcal{A}^n\to \RR_+$ assigning a code length in bits to any finite string, such that for every stationary ergodic law $Q$ on $\mathcal{A}^{\N}$,
+\begin{equation}\label{eq:universality}
+\frac{1}{n}\Big(\code_{\mathcal{A}}(Y_{0:n-1}) + \log_2 Q_n(Y_{0:n-1})\Big) \xrightarrow[n\to\infty]{Q\text{-a.s.}} 0,
+\end{equation}
+with convergence also in $L^1(Q)$. Classical examples include LZ78, Krichevsky--Trofimov mixtures for finite-order Markov models, and CTW \cite{ziv1978,kt1981,willems1995ctw,shields1996,csiszarshields2004}.
+
+\paragraph{Representation transforms and loops.}
+For each $n$, let $F_{i,n}$ be a measurable map $F_{i,n}:\X_{i-1}^{n_{i-1}(n)}\to\X_i^{n_i(n)}$, where the alphabets $\X_i$ may differ by step, and $n_0(n)=n$. Define successive images
+\[
+x^{(0)} = x \in \X^n,\quad x^{(i)} = F_{i,n}\circ\cdots\circ F_{1,n}(x^{(0)}) \in \X_i^{n_i(n)}.
+\]
+A finite list $\gamma=(F_{1,n},\ldots,F_{m,n})$ is a \emph{loop at scale $n$} if $n_m(n)=n$ and $\X_m=\X_0=\X$. Let $L_n=F_{m,n}\circ\cdots\circ F_{1,n}:\X^n\to\X^n$ be the loop map and let $Q_n := (L_n)\push P_n$.
+
+\subsection{Two holonomy functionals}
+
+\begin{definition}[Representation-space holonomy]\label{def:holonomy-out}
+Given a universal code $\code_{\X}$, define
+\begin{align*}
+\mathrm{Hol}_{n}^{\mathrm{out},\gamma}(x)
+  &= \sum_{i=1}^m \Big(\code_{\X_i}\big(x^{(i)}\big)-\code_{\X_{i-1}}\big(x^{(i-1)}\big)\Big)\\
+  &= \code_{\X}\big(L_n(x)\big)-\code_{\X}(x).
+\end{align*}
+\end{definition}
+
+\begin{definition}[KL (observer-transported) holonomy]\label{def:holonomy-kl}
+Let $\code_\X^{(P)}$ and $\code_\X^{(Q)}$ be universal on $\X$ for $P$ and for a stationary pushforward $Q$ with marginals $Q_n$, respectively. Define the \emph{pointwise log-likelihood holonomy}
+\[
+\Lambda_n^\gamma(x) := \log_2\frac{P_n(x)}{Q_n(L_n(x))},
+\]
+and its \emph{code-based} estimator
+\[
+\mathrm{Hol}_{n}^{\mathrm{KL},\gamma}(x) := \code_\X^{(Q)}(x) - \code_\X^{(P)}(x).
+\]
+\end{definition}
+
+The estimator in \eqref{def:holonomy-kl} matches what our KT-based implementation computes: train a universal model on the forward path and one on the loop-transformed path, then evaluate \emph{both} on the \emph{same} evaluation sequence and subtract code lengths.
+
+\section{Reductions via Universality}
+
+\begin{lemma}[Pointwise reductions]\label{lem:pointwise}
+Assume \eqref{eq:universality} for the relevant laws.
+\begin{enumerate}[leftmargin=2em,itemsep=0.25em]
+\item For $\mathrm{Hol}^{\mathrm{out}}$: with $\code_\X$ universal for both $P$ and the pushforward process,
+\begin{equation}\label{eq:hol-out-reduction}
+\frac{1}{n}\Big(\mathrm{Hol}_{n}^{\mathrm{out},\gamma}(X_{0:n-1}) - \log_2\frac{P_n(X_{0:n-1})}{Q_n(L_n(X_{0:n-1}))}\Big) \xrightarrow[n\to\infty]{P\text{-a.s.}} 0.
+\end{equation}
+\item For $\mathrm{Hol}^{\mathrm{KL}}$:
+\begin{equation}\label{eq:hol-kl-reduction}
+\frac{1}{n}\Big(\mathrm{Hol}_{n}^{\mathrm{KL},\gamma}(X_{0:n-1}) - \log_2\frac{P_n(X_{0:n-1})}{Q_n(L_n(X_{0:n-1}))}\Big) \xrightarrow[n\to\infty]{P\text{-a.s.}} 0.
+\end{equation}
+\end{enumerate}
+Both convergences also hold in $L^1(P)$.
+\end{lemma}
+\begin{proof}
+Apply \eqref{eq:universality} to each code/law pair (Barron's strong pointwise coding theorem) and subtract the limits; see \cite{barron1985,csiszarshields2004,shields1996}.
+\end{proof}
+
+Averaging yields the two central identities.
+
+\begin{theorem}[Expectation-level reductions]\label{thm:exp_reductions}
+Under $L^1$ universality,
+\begin{align}
+\frac{1}{n}\,\E_P\big[\mathrm{Hol}_{n}^{\mathrm{out},\gamma}\big]
+&= h(Q)-h(P)+o(1), \label{eq:exp-out}\\[0.35em]
+\frac{1}{n}\,\E_P\big[\mathrm{Hol}_{n}^{\mathrm{KL},\gamma}\big]
+&= \frac{1}{n}\,\KL(P_n\|Q_n)\;\xrightarrow[n\to\infty]{}\; \mathsf{d}(P\|Q)\;\ge 0. \label{eq:exp-kl}
+\end{align}
+\end{theorem}
+\begin{proof}
+Take expectations in \eqref{eq:hol-out-reduction}--\eqref{eq:hol-kl-reduction} and note
+$\E_P[-\log_2 P_n(X_{0:n-1})]=H(P_n)$, $\E_P[-\log_2 Q_n(L_n(X_{0:n-1}))]=H(Q_n)$, and $\E_P\big[\log_2 \tfrac{P_n(X)}{Q_n(L_n(X))}\big]=\KL(P_n\|Q_n)$.
+\end{proof}
+
+\begin{remark}[Scope]
+Equation~\eqref{eq:exp-out} is gauge-invariant and measures net compression or expansion under the loop. Equation~\eqref{eq:exp-kl} is the \emph{irreversibility} functional implemented in our code (KL-rate holonomy): it is observer-transported and non-negative.
+\end{remark}
+
+\section{Canonical Loops and Corollaries}
+
+\subsection{Gauge invariance for bijective loops}
+
+\begin{corollary}[Gauge invariance]\label{cor:gauge}
+If each $F_{i,n}$ is a bijection and the loop is the identity on $\X^n$, then
+\[
+\frac{1}{n}\,\mathrm{Hol}_{n}^{\mathrm{out},\gamma}(X_{0:n-1}) \to 0
+\quad\text{and}\quad
+\frac{1}{n}\,\mathrm{Hol}_{n}^{\mathrm{KL},\gamma}(X_{0:n-1}) \to 0
+\]
+in $P$-probability and in $L^1(P)$.
+\end{corollary}
+\begin{proof}
+Then $Q_n=P_n$ for all $n$, so both \eqref{eq:exp-out} and \eqref{eq:exp-kl} vanish.
+\end{proof}
+
+\subsection{Coarse-graining loops via channels}
+Let $K_n$ be a (possibly many-to-one) Markov kernel on $\X^n$ and $R_n$ any measurable right-inverse (a ``lift'') so that $L_n:=R_n\circ K_n:\X^n\to\X^n$ is a loop. If $Q_n:=L_n\push P_n$ arises from a stationary $Q$, then by \eqref{eq:exp-kl}
+\[
+\frac{1}{n}\,\E_P\big[\mathrm{Hol}_{n}^{\mathrm{KL},\gamma}\big] \to \mathsf{d}(P\|Q) \ge 0.
+\]
+This is the non-negativity you empirically test in the battery.
+
+\subsection{Time reversal and entropy production for Markov chains}
+
+Let $P$ be a stationary Markov chain on $\X=\{1,\dots,k\}$ with transition $T$ and stationary $\pi$. Its time-reversal $P^{\mathrm{rev}}$ has transitions $T^\ast_{ji}=\frac{\pi_i T_{ij}}{\pi_j}$. For length $n$, let $R_n$ denote reversal of the string. Consider the canonical loop
+\[
+\textsf{Encode transitions}\ \to\ \textsf{Reverse}\ \to\ \textsf{Decode second},
+\]
+which maps paths back to $\X^n$ (up to a boundary symbol). This is exactly the loop implemented in our estimator.
+
+\begin{theorem}[KL holonomy rate equals entropy production]\label{thm:EP}
+For the Markov setting above,
+\begin{equation}\label{eq:EP_rate}
+\mathsf{d}(P\|P^{\mathrm{rev}}) \;=\; \sum_{i,j}\pi_i T_{ij}\,\log_2\frac{\pi_i T_{ij}}{\pi_j T_{ji}} \;=\; \sigma\quad(\text{bits/step}),
+\end{equation}
+and the KL-holonomy satisfies
+\begin{equation}\label{eq:EP_hol}
+\frac{1}{n}\,\E_P\big[\mathrm{Hol}_{n}^{\mathrm{KL},\mathrm{time\text{-}rev}}\big] \;\to\; \sigma.
+\end{equation}
+\end{theorem}
+\begin{proof}
+The path log-likelihood ratio between $P$ and the reversed path law under $P^{\mathrm{rev}}$ is
+\[
+\log\frac{P_n(X_{0:n-1})}{P_n^{\mathrm{rev}}(R_n(X_{0:n-1}))}
+= \sum_{t=1}^{n-1}\log\frac{\pi_{X_t}}{\pi_{X_{t-1}}}
++ \sum_{t=1}^{n-1}\log\frac{T_{X_{t-1}X_t}}{T_{X_t X_{t-1}}}.
+\]
+The stationary term telescopes to $O(1)$; divide by $n$ and take expectations. Identity \eqref{eq:EP_rate} is standard in stochastic thermodynamics \cite{schnakenberg1976,seifert2012}. Equation \eqref{eq:EP_hol} is \eqref{eq:exp-kl} with $Q=P^{\mathrm{rev}}$.
+\end{proof}
+
+\begin{remark}[Why not merely $h(Q)-h(P)$?]
+For stationary Markov chains, $h(P)=h(P^{\mathrm{rev}})$, so representation-space holonomy would vanish. The KL version (observer-transported) returns the irreversible production $\sigma$.
+\end{remark}
+
+\subsection{General ergodic reversal}
+Let $P^\ast$ be any stationary time-reversed process absolutely continuous w.r.t.\ $P$ on cylinders, with finite $\mathsf{d}(P\|P^\ast)$. Then, by the same argument,
+\begin{equation}\label{eq:general_rev}
+\frac{1}{n}\,\E_P\big[\mathrm{Hol}_{n}^{\mathrm{KL},\mathrm{time\text{-}rev}}\big] \;\to\; \mathsf{d}(P\|P^\ast).
+\end{equation}
+
+\section{Observer Independence}
+
+\begin{theorem}[Code-robustness of holonomy]\label{thm:observer_ind}
+Let $\code^{(1)}$ and $\code^{(2)}$ be universal on $\X$ for the laws appearing in Lemma~\ref{lem:pointwise}. Then, for any fixed loop $\gamma$,
+\[
+\frac{1}{n}\Big|\mathrm{Hol}_{n,\,\code^{(1)}}^{\mathrm{KL},\gamma}(X_{0:n-1}) - \mathrm{Hol}_{n,\,\code^{(2)}}^{\mathrm{KL},\gamma}(X_{0:n-1})\Big| \xrightarrow[n\to\infty]{P\text{-a.s.}} 0,
+\]
+and likewise in $L^1(P)$.
+\end{theorem}
+\begin{proof}
+Apply Lemma~\ref{lem:pointwise} to both codes and subtract.
+\end{proof}
+
+\section{Numerical validation (UEC battery)}
+All experiments were run with the companion script \texttt{uec\_battery.py}. Selected outputs you reported:
+
+\begin{itemize}[leftmargin=1.25em]
+\item \textbf{Gauge invariance (bijective loop):} KL-rate holonomy $\approx 0$ (bits/step), as expected.
+\item \textbf{Time reversal (Markov):} EP (analytic) $=0.0426087$, KL-rate holonomy $=0.0426943$, abs.\ diff $8.56\times10^{-5}$, rel.\ diff $0.201\%$.
+\item \textbf{Three-way EP consistency:} true $=1.42482$, hol $=1.44107$, smoothed-counts MLE $=1.44103$; $|t-h|=0.0163$, $|h-m|=4.19\times10^{-5}$.
+\item \textbf{Random-chain sweep:} mean $|{\rm hol}-{\rm EP}|=0.00183$ bits/step; mean relative error $\approx 1.31\%$.
+\item \textbf{Deterministic checks:} 2-state near-reversible: EP $\approx 0$, hol $\approx 0$. Ring chains: analytic EP matches holonomy within $<5\cdot10^{-3}$ bits/step.
+\item \textbf{Segment/alignment stability:} full-window holonomy consistent with first/second halves; head/tail alignment differences $<10^{-3}$.
+\end{itemize}
+
+\paragraph{AoT demo (audio/sensors/finance).} In the AoT classifier, we found two practical choices materially improve alignment between AUC and holonomy:
+(i) \emph{loop-negatives} (Encode$\to$Reverse$\to$DecodeSecond) rather than literal reversal for ``negative'' windows; (ii) domain preprocessing: first differences for audio/sensors; log-returns for finance. These switches make the AUC reflect the same reversal the holonomy uses, avoiding sign/pathology mismatches.\footnote{Command flags in the code: \texttt{--aot\_diff}, \texttt{--aot\_logreturn}, and \texttt{--aot\_rate}.}
+
+\section*{Discussion}
+We distinguished two operational regimes. If one evaluates evidence \emph{in the representation reached by the loop}, holonomy reduces to the \emph{entropy-rate difference} $h(Q)-h(P)$ (Theorem~\ref{thm:exp_reductions}); this yields gauge invariance and detects net compression/expansion by the loop. If instead one \emph{transports the observer} and evaluates evidence against the loop's pushforward law on the \emph{original coordinates}, holonomy equals the \emph{relative entropy rate} $\mathsf{d}(P\|Q)$, recovering irreversibility and, for Markov time reversal, the entropy production rate.
+
+\paragraph{Technical extensions.} The finite-alphabet assumption can be relaxed via quantization and standard approximation. The Markov time-reversal equality extends to hidden Markov models at the level of path measures; holonomy on observed records gives a certified lower bound by data processing (and in the quantum setting by Lindblad/Uhlmann monotonicity).
+
+\begin{thebibliography}{12}
+
+\bibitem{ziv1978}
+J. Ziv and A. Lempel, ``Compression of individual sequences via variable-rate coding,'' \emph{IEEE Trans. Inf. Theory}, 24(5):530--536, 1978.
+
+\bibitem{kt1981}
+R. E. Krichevsky and V. K. Trofimov, ``The performance of universal encoding,'' \emph{IEEE Trans. Inf. Theory}, 27(2):199--207, 1981.  (See also surveys in \cite{csiszarshields2004}.)
+
+\bibitem{willems1995ctw}
+F. M. J. Willems, Y. M. Shtarkov, and T. J. Tjalkens, ``The Context-Tree Weighting Method: Basic Properties,'' \emph{IEEE Trans. Inf. Theory}, 41(3):653--664, 1995. 
+
+\bibitem{rissanen1978mdl}
+J. Rissanen, ``Modeling by shortest data description,'' \emph{Automatica}, 14(5):465--471, 1978.
+
+\bibitem{barron1985}
+A. R. Barron, ``The strong ergodic theorem for densities: generalized Shannon--McMillan--Breiman,'' \emph{Annals of Probability}, 13(4):1292--1303, 1985.
+
+\bibitem{shields1996}
+P. C. Shields, \emph{The Ergodic Theory of Discrete Sample Paths}, Graduate Studies in Mathematics, Vol. 13, American Mathematical Society, 1996.
+
+\bibitem{csiszarshields2004}
+I. Csisz\'ar and P. C. Shields, ``Information theory and statistics: A tutorial,'' \emph{Foundations and Trends in Communications and Information Theory}, 1(4):417--528, 2004.
+
+\bibitem{coverthomas}
+T. M. Cover and J. A. Thomas, \emph{Elements of Information Theory}, 2nd ed., Wiley, 2006.
+
+\bibitem{schnakenberg1976}
+J. Schnakenberg, ``Network theory of master equation,'' \emph{Reviews of Modern Physics}, 48(4):571--585, 1976.
+
+\bibitem{seifert2012}
+U. Seifert, ``Stochastic thermodynamics, fluctuation theorems and molecular machines,'' \emph{Reports on Progress in Physics}, 75:126001, 2012.
+
+\bibitem{kawai2007}
+R. Kawai, J. M. R. Parrondo, and C. Van den Broeck, ``Dissipation: The phase-space perspective,'' \emph{Phys. Rev. Lett.}, 98:080602, 2007.  See also illustrative expositions: J. Horowitz and C. Jarzynski (2009) and A. G\'omez-Marin et al. (2008, 2007).
+
+\bibitem{lindblad1975}
+G. Lindblad, ``Completely positive maps and entropy inequalities,'' \emph{Communications in Mathematical Physics}, 40:147--151, 1975. (Quantum data-processing/monotonicity.)
+
+\end{thebibliography}
+
+\end{document}
