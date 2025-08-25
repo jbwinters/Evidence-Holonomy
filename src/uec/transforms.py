@@ -1,3 +1,17 @@
+"""
+Representation transforms and loop machinery.
+
+These pure transforms act on integer-valued sequences and alphabets:
+- Permute: bijective recoding of symbols by a permutation (gauge transform).
+- MergeSymbols: coarse-grain by mapping many symbols to fewer.
+- TimeReverse: reverse the sequence order.
+- TransitionEncode/Decode: map a state sequence to transitions and back.
+- Downsample/UpsampleRepeat: simple temporal scaling transforms.
+
+Loops are composed by apply_loop(), returning the transformed sequence and
+its final alphabet. Holonomy estimators build on these to define loops.
+"""
+
 from __future__ import annotations
 from typing import Dict, List, Sequence, Tuple
 
@@ -75,8 +89,8 @@ class UpsampleRepeat(Transform):
 
 
 def apply_loop(seq: Sequence[int], alphabet: Sequence[int], transforms: List[Transform]) -> Tuple[List[int], List[int]]:
+    """Apply a list of transforms in order, returning (sequence, alphabet)."""
     s, a = list(seq), list(alphabet)
     for T in transforms:
         s, a = T.apply(s, a)
     return s, a
-
