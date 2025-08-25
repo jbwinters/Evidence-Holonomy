@@ -72,3 +72,7 @@ CI: GitHub Actions runs tests on 3.9–3.11. Publishing to PyPI happens on relea
 ## License
 
 Code is licensed under MIT. Text, figures, and conceptual content are licensed under CC-BY 4.0 — please cite when reusing.
+
+## Attributions
+
+Audio samples under `data/wav/` are from Freesound.org and used for AoT demos. See `ATTRIBUTIONS.md` for links and author credits. Please abide by the license terms on each Freesound page.
