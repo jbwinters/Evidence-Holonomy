@@ -1,3 +1,14 @@
+"""
+Universal coders (KT and LZ) with frozen evaluation.
+
+- KTMarkovMixture implements an online Krichevsky–Trofimov mixture across
+  Markov orders r=0..R for a k-ary alphabet. It supports 'frozen' evaluation
+  (snapshot) to compute cross-entropy on held-out sequences.
+- LZ78Coder provides a simple description-length estimator (sanity checks).
+
+These are used to estimate KL-rate holonomy via cross-entropy differences.
+"""
+
 from __future__ import annotations
 import math
 from collections import defaultdict
@@ -6,6 +17,7 @@ import numpy as np
 
 
 class KTMarkovMixture:
+    """Krichevsky–Trofimov mixture over Markov orders for a k-ary alphabet."""
     def __init__(self, alphabet_size: int, R: int = 3, prior_decay: float = 2.0):
         self.k = int(alphabet_size)
         self.R = int(R)
@@ -23,6 +35,7 @@ class KTMarkovMixture:
         return (counts + 0.5) / (n + 0.5 * k)
 
     def update_and_codelen(self, sym: int) -> float:
+        """Update model with symbol sym and return incremental code length (bits)."""
         sym = int(sym)
         preds = []
         for r in range(self.R + 1):
@@ -46,6 +59,7 @@ class KTMarkovMixture:
         return codelen
 
     def fit(self, sequence: Sequence[int]) -> float:
+        """Fit the model to a sequence and return total code length (bits)."""
         self.reset()
         total = 0.0
         for s in sequence:
@@ -61,6 +75,7 @@ class KTMarkovMixture:
         self.history = []
 
     def snapshot_frozen(self) -> "KTFrozenPredictor":
+        """Return a frozen predictor that evaluates code length without updates."""
         tables_copy: List[Dict[Tuple[int, ...], np.ndarray]] = []
         for d in self.tables:
             newd: Dict[Tuple[int, ...], np.ndarray] = {}
@@ -71,6 +86,7 @@ class KTMarkovMixture:
 
 
 class KTFrozenPredictor:
+    """Frozen KT predictor: evaluates code length on a sequence with no updates."""
     def __init__(
         self,
         tables: List[Dict[Tuple[int, ...], np.ndarray]],
@@ -90,6 +106,7 @@ class KTFrozenPredictor:
         return (counts + 0.5) / (n + 0.5 * k)
 
     def codelen_sequence(self, sequence: Sequence[int]) -> float:
+        """Return total code length (bits) of sequence under the frozen KT model."""
         self.history = []
         total = 0.0
         for sym in sequence:
@@ -110,10 +127,12 @@ class KTFrozenPredictor:
 
 
 class LZ78Coder:
+    """LZ78 description length estimator (coarse sanity checks for universality)."""
     def __init__(self, alphabet_size: int):
         self.k = int(alphabet_size)
 
     def total_codelen(self, sequence: Sequence[int]) -> float:
+        """Return total LZ78 code length (bits) for an integer-valued sequence."""
         dict_trie: Dict[Tuple[int, ...], Dict[int, dict]] = {(): {}}
         curr: Tuple[int, ...] = ()
         phrases = 0
@@ -137,4 +156,3 @@ class LZ78Coder:
             symbol_bits = math.log2(self.k)
             bits += index_bits + symbol_bits
         return bits
-
