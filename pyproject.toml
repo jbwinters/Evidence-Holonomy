@@ -1,0 +1,43 @@
+[build-system]
+requires = ["hatchling>=1.20"]
+build-backend = "hatchling.build"
+
+[project]
+name = "uec-holonomy"
+version = "0.1.0"
+description = "Universal Evidence Curvature (UEC): KL-rate holonomy, entropy production estimation, and Arrow-of-Time demos"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [
+  { name = "Josh Winters", email = "josh@friendmachine.co" }
+]
+keywords = ["entropy production", "information theory", "universal coding", "holonomy", "arrow of time", "KL divergence"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "License :: OSI Approved :: MIT License",
+  "Topic :: Scientific/Engineering :: Information Analysis",
+  "Intended Audience :: Science/Research",
+]
+dependencies = [
+  "numpy>=1.23",
+]
+
+[project.optional-dependencies]
+audio = ["scipy>=1.8"]
+dev = ["pytest>=7", "pytest-cov>=4", "ruff>=0.5", "build>=1.0"]
+
+[project.urls]
+Homepage = "https://github.com/your-org/uec-holonomy"
+Issues = "https://github.com/your-org/uec-holonomy/issues"
+
+[project.scripts]
+uec-battery = "uec.cli:run_battery"
+uec-aot = "uec.cli:run_aot"
+
+[tool.hatch.build]
+packages = ["src/uec"]
+
