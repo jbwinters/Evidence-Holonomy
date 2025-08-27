@@ -28,10 +28,10 @@ def klrate_between_sequences(p_seq: Sequence[int], q_seq: Sequence[int], k: int,
     Trains KT(k,R) on p_seq and q_seq separately; evaluates H_P(p) and H_Q(p) on
     the same p_seq using frozen predictors; returns H_Q(p)-H_P(p) in bits/symbol.
     """
-    Pcoder = KTMarkovMixture(k, R=R)
+    Pcoder = KTMarkovMixture(alphabet_size=k, R=R)
     Pcoder.fit(p_seq)
     Pfrozen = Pcoder.snapshot_frozen()
-    Qcoder = KTMarkovMixture(k, R=R)
+    Qcoder = KTMarkovMixture(alphabet_size=k, R=R)
     Qcoder.fit(q_seq)
     Qfrozen = Qcoder.snapshot_frozen()
     H_P = Pfrozen.codelen_sequence(p_seq) / max(1, len(p_seq))

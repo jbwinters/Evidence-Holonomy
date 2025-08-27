@@ -35,6 +35,26 @@ uec-aot --scoreboard_glob "data/wav/*.wav" --aot_bins 32 --aot_win 65536 --aot_s
 
 See `uec_theory.tex` for the theory (two holonomies: representation-space vs. observer-transported KL), reductions, and references.
 
+## Analysis Scripts
+
+BTC UEC analysis and utilities (research-only):
+
+- `python scripts/btc_uec_analysis.py [--tail N] [--window W] [--k_r K] [--k_v K] [--uec_method counts|kt]`:
+  - Computes UEC stream (bits/step), z-scores, optional bootstrap CIs, change-points; runs a simple UEC-gated trend backtest.
+  - Outputs: `results/btc_uec_analysis.csv`, `results/btc_uec_summary.json`.
+
+- `python scripts/uec_diagnostics.py --gauge --surrogate --markov [--ergodic_segments 4] [--jitter_std 0.05]`:
+  - Gauge/surrogate ~ 0 checks, Markov EP vs holonomy, ergodicity probe across segments, measurement jitter robustness.
+
+- `python scripts/uec_sensitivity.py --tail 50000 --k_list 6,8,12,16 --r_list 1,2,3 --method counts`:
+  - Sensitivity grid over discretization and order; outputs `results/uec_sensitivity.csv`.
+
+- `python scripts/uec_multiscale.py --tail 50000 --scales 1,2,4,8`:
+  - Multi-scale spectrum (downsampling) and coarse-grain-loop holonomy; attribution (joint vs returns-only vs volume-only).
+
+- `python scripts/uec_bench.py --tail 20000 --W_list 128,256 --R_list 1,2,3`:
+  - Timing for counts vs KT pipelines.
+
 ## Python API
 
 ```python
@@ -76,3 +96,13 @@ Code is licensed under MIT. Text, figures, and conceptual content are licensed u
 ## Attributions
 
 Audio samples under `data/wav/` are from Freesound.org and used for AoT demos. See `ATTRIBUTIONS.md` for links and author credits. Please abide by the license terms on each Freesound page.
+
+## Assumptions and Safe Operation
+
+See `docs/assumptions.md` for refined theoretical assumptions (finite alphabet, stationarity, ergodicity, sufficiency, loop closure) and practical “Check / Work‑around / Relax” guidance.
+
+The BTC UEC analysis (`scripts/btc_uec_analysis.py`) logs:
+- Loop closure alignment and chosen alphabet size `k`.
+- Sufficiency warnings when `n << 50·k^R` (train) or `10·k^R` (eval).
+- Support overlap issues (forward `i→j` seen while reverse `j→i` never seen).
+- Stationarity split deltas (first vs second half code‑rates).

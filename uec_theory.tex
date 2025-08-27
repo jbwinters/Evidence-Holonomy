@@ -38,14 +38,13 @@
 \title{Evidence Holonomy and Entropy Production:\\
 From Universal Coding to Irreversibility}
 \author{Joshua Winters\\Independent Researcher\\\texttt{josh@friendmachine.co}}
-\date{\today}
+\date{August 27, 2025}
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
-We formalize an ``evidence holonomy'' functional on loops of representation transforms applied to sample paths. Using pointwise universality of code lengths for stationary ergodic processes, we prove two complementary reductions:
-(i) \emph{representation-space holonomy} (measuring evidence in the final representation reached by the loop) converges, up to $o(n)$, to the entropy-rate difference $h(Q)-h(P)$; (ii) \emph{KL holonomy} with \emph{observer transport} (measuring the forward path under a code universal for the loop pushforward law but evaluated in the \emph{original} coordinates) converges to the \emph{relative entropy rate} $\mathsf{d}(P\|Q)$. As corollaries we obtain: gauge invariance for bijective loops; non-negativity for channel-based loops in the KL sense; and, for finite-state Markov chains under a canonical time-reversal loop, equality between holonomy rate and the \emph{entropy production rate}. We also show observer-independence of the holonomy rate across universal coders. A companion battery of numerical tests validates these statements.
+We define an ``evidence holonomy'' functional on loops of representation transforms applied to sample paths. Using pointwise universality of code lengths for stationary ergodic processes, we prove two reductions: (i) \textbf{representation-space holonomy} converges (up to $o(n)$) to the entropy-rate difference $h(Q)-h(P)$; (ii) \textbf{KL-holonomy}—implemented by transporting a universal code trained under $P$ to one trained under $Q$—converges to the relative-entropy rate $\mathsf{d}(P\|Q)$. For finite-state Markov processes, KL-holonomy along the time-reversal loop equals the entropy-production rate $\sigma$ (bits/step). We show asymptotic code-invariance of KL-holonomy and validate the framework on Arrow-of-Time benchmarks (audio, sensors, finance).
 \end{abstract}
 
 \section{Setup and Definitions}
@@ -200,6 +199,10 @@ and likewise in $L^1(P)$.
 Apply Lemma~\ref{lem:pointwise} to both codes and subtract.
 \end{proof}
 
+\section{Code \& Data}
+
+All code and data are available at: \url{https://github.com/josh-winters/holonomy}
+
 \section{Numerical validation (UEC battery)}
 
 All experiments were run with the companion script \texttt{uec\_battery.py}. The suite covers: (i) gauge invariance under bijective recoding; (ii) coarse-graining/refinement loops (non-negativity of KL holonomy); (iii) Markov time-reversal, where KL holonomy matches the analytic entropy production (EP) $\sigma$ in bits/step; (iv) observer-independence trends (KT vs.\ LZ code lengths per symbol converge); (v) robustness sweeps (random chains, low/high EP regimes, alignment/segment stability), and (vi) bootstrap confidence intervals for windowed estimates.
@@ -221,7 +224,7 @@ We distinguished two operational regimes. If one evaluates evidence \emph{in the
 \paragraph{Technical extensions.} The finite-alphabet assumption can be relaxed via quantization and standard approximation. The Markov time-reversal equality extends to hidden Markov models at the level of path measures; holonomy on observed records gives a certified lower bound by data processing (and in the quantum setting by Lindblad/Uhlmann monotonicity \cite{lindblad1975,uhlmann1977}). Absolute continuity requirements ensure finite rates (e.g., $\sigma<\infty$ requires $T_{ij}>0 \Rightarrow T_{ji}>0$).
 
 \section*{Acknowledgements}
-I used GPT-5 heavily in the creation of this document.
+Portions of the text were drafted or revised with assistance from OpenAI's GPT-5. The author verified all content and takes full responsibility for the paper.
 
 \begin{thebibliography}{20}
 
