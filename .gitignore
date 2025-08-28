@@ -1,4 +1,5 @@
 scratch/
+.claude
 
 # Python
 __pycache__/
