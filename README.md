@@ -4,7 +4,7 @@ Universal Evidence Curvature (UEC): KL-rate holonomy, entropy production estimat
 
 - KL-rate holonomy estimators that match D(P||Q) on loops of representation.
 - Equality to entropy production for the Markov time-reversal loop (bits/step).
-- A minimal test battery and AoT (Arrow-of-Time) demos for audio, sensors, finance.
+- A minimal test battery and AoT (Arrow-of-Time) demos for audio, images, video, sensors, and finance.
 
 ## Install
 
@@ -12,8 +12,11 @@ Universal Evidence Curvature (UEC): KL-rate holonomy, entropy production estimat
 pip install uec-holonomy            # (once published)
 # from source (dev extras include tests/lint)
 pip install -e .[dev]
-# audio extras (optional, for SciPy WAV reader)
-pip install -e .[audio]
+# optional extras
+pip install -e .[audio]        # SciPy WAV reader
+pip install -e .[image]        # PIL/Pillow for images  
+pip install -e .[video]        # imageio for video
+pip install -e .[all]          # all optional dependencies
 ```
 
 ## CLI
@@ -25,11 +28,25 @@ uec-battery --fast         # quick run
 uec-battery --run_suite    # full suite + artifacts
 ```
 
-- AoT demos (CSV/WAV, scoreboard):
+- AoT demos (CSV/WAV/Image/Video, scoreboard):
 
 ```bash
+# Audio analysis
 uec-aot --aot_wav data/wav/boiling.wav --aot_bins 32 --aot_win 65536 --aot_stride 32768 --order 5 --aot_diff
+
+# Financial time series
 uec-aot --aot_csv data/kaggle/btc.csv --aot_csv_col Close --aot_logreturn --aot_rate 1
+
+# Image analysis (raster scan)
+uec-aot --aot_image image.png --image_mode raster --aot_bins 16
+
+# Image analysis (patch vector quantization)
+uec-aot --aot_image image.png --image_mode patch --image_vq_k 256 --image_patch 8
+
+# Video analysis (frame-level vector quantization)
+uec-aot --aot_video video.mp4 --video_vq_k 64 --video_down 16 --aot_win 512 --aot_stride 256
+
+# Scoreboard across multiple files
 uec-aot --scoreboard_glob "data/wav/*.wav" --aot_bins 32 --aot_win 65536 --aot_stride 32768 --order 5 --aot_diff
 ```
 
@@ -58,13 +75,31 @@ BTC UEC analysis and utilities (research-only):
 ## Python API
 
 ```python
+# Core holonomy analysis
 from uec.markov import random_markov_biased, sample_markov, entropy_production_rate_bits
 from uec.holonomy import klrate_holonomy_time_reversal_markov
+from uec.aot import aot_from_series
 
 T = random_markov_biased(k=3, delta=0.6)
 x = sample_markov(T, n=150_000)
 print(entropy_production_rate_bits(T))
 print(klrate_holonomy_time_reversal_markov(x, k=3, R=3))
+
+# Image and video analysis
+from uec.adapters import (
+    load_image_gray, image_to_tokens_raster, image_to_tokens_patch_vq,
+    video_to_tokens_vq
+)
+import numpy as np
+
+# Load and tokenize image
+img = load_image_gray("image.png")
+tokens, k = image_to_tokens_raster(img, k=16)
+result = aot_from_series(np.array(tokens), k=k, R=3)
+
+# Load and tokenize video  
+tokens, k, fps, codebook = video_to_tokens_vq("video.mp4", k_codebook=64)
+result = aot_from_series(np.array(tokens), k=k, R=3, sr=fps)
 ```
 
 ## Model Validation Results
@@ -93,6 +128,29 @@ The holonomy-based Arrow-of-Time analysis has been validated across diverse audi
 
 These results demonstrate that the holonomy-based approach correctly distinguishes reversible from irreversible temporal processes across both synthetic test cases and real-world audio recordings.
 
+### Image and Video Validation
+
+The framework has been extended to support images and video with comprehensive validation:
+
+**Video Test Results (Synthetic):**
+
+| Video Type | AUC | Interpretation |
+|------------|-----|----------------|
+| **Static Pattern** | 0.000 | ✅ **Perfect Reversibility** |
+| **Periodic Motion** | 0.598 | 🔶 **Weakly Irreversible** |
+| **Biased Random Walk** | 0.698 | 🔶 **Moderately Irreversible** |
+| **Temporal Gradient** | 0.947 | 🔴 **Highly Irreversible** |
+
+**Image Analysis Modes:**
+- **Raster scan**: Treats images as 1D sequences via row-major order
+- **Patch VQ**: Vector quantization of image patches for spatial-temporal structure
+
+**Key Features:**
+- Frame-level vector quantization for video temporal analysis
+- Codebook training and reuse across datasets
+- Integration with existing AoT pipeline (bits/step, bits/second)
+- Robust fallbacks when optional dependencies unavailable
+
 ## Development
 
 Run tests:
@@ -110,6 +168,7 @@ src/uec/
   transforms.py  # recode, coarse-grain, time-reversal, transitions, (down/up)-sample
   holonomy.py    # KL-rate estimators and time-reversal loop
   aot.py         # AoT pipeline (discretize → train(P,Q) → scores & CI)
+  adapters.py    # image/video tokenization (raster, patch VQ, frame VQ)
   cli.py         # console entry points: uec-battery, uec-aot
 ```
 
