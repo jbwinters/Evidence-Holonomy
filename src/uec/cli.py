@@ -184,7 +184,13 @@ def run_aot(argv: list[str] | None = None) -> None:
                         rng=rng,
                     )
                 else:
-                    x = load_csv_column(path, column=args.aot_csv_col)
+                    # Parse column to int if possible, otherwise use as string
+                    col = args.aot_csv_col
+                    try:
+                        col = int(col)
+                    except Exception:
+                        pass
+                    x = load_csv_column(path, column=col)
                     rng = (None if base_rng is None else np.random.default_rng(base_rng.integers(0, 2**32)))
                     res = aot_from_series(
                         x,
