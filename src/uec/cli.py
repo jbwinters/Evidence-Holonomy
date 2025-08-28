@@ -17,6 +17,10 @@ import numpy as np
 from .markov import random_markov_biased, sample_markov, entropy_production_rate_bits
 from .holonomy import klrate_holonomy_time_reversal_markov
 from .aot import aot_from_series, load_csv_column, load_wav_mono
+from .adapters import (
+    load_image_gray, image_to_tokens_raster, image_to_tokens_patch_vq,
+    video_to_tokens_vq, save_codebook, load_codebook
+)
 
 
 def run_battery(argv: list[str] | None = None) -> None:
@@ -79,6 +83,8 @@ def run_aot(argv: list[str] | None = None) -> None:
     p.add_argument("--aot_csv", type=str)
     p.add_argument("--aot_csv_col", type=str, default="0")
     p.add_argument("--aot_wav", type=str)
+    p.add_argument("--aot_image", type=str)
+    p.add_argument("--aot_video", type=str)
     p.add_argument("--aot_bins", type=int, default=8)
     p.add_argument("--aot_win", type=int, default=4096)
     p.add_argument("--aot_stride", type=int, default=2048)
@@ -89,6 +95,19 @@ def run_aot(argv: list[str] | None = None) -> None:
     p.add_argument("--aot_train_frac", type=float, default=0.5, help="Fraction for training (vs test)")
     p.add_argument("--target_std", type=float, default=1.0, help="Target standard deviation for WAV normalization")
     p.add_argument("--coder", type=str, choices=["kt", "lz78"], default="kt", help="Coder type for KL estimates")
+    # Image-specific options
+    p.add_argument("--image_mode", type=str, choices=["raster", "patch"], default="raster", help="Image tokenization mode")
+    p.add_argument("--image_patch", type=int, default=8, help="Patch size for patch mode")
+    p.add_argument("--image_vq_k", type=int, default=256, help="Codebook size for patch VQ")
+    p.add_argument("--image_codebook", type=str, help="Path to save/load image codebook")
+    
+    # Video-specific options  
+    p.add_argument("--video_down", type=int, default=32, help="Downscale frames to NxN")
+    p.add_argument("--video_stride", type=int, default=1, help="Frame sampling stride")
+    p.add_argument("--video_vq_k", type=int, default=256, help="Codebook size for frame VQ")
+    p.add_argument("--video_max", type=int, help="Maximum frames to load")
+    p.add_argument("--video_codebook", type=str, help="Path to save/load video codebook")
+    
     p.add_argument("--scoreboard_glob", type=str)
     p.add_argument("--scoreboard_csv", type=str, help="Export scoreboard to CSV file")
     p.add_argument("--seed", type=int, help="RNG seed for reproducible AoT CIs")
@@ -160,6 +179,97 @@ def run_aot(argv: list[str] | None = None) -> None:
         }
         print(json.dumps(result))
         return
+
+    if args.aot_image:
+        try:
+            img = load_image_gray(args.aot_image)
+            
+            # Load existing codebook if specified
+            codebook = None
+            if args.image_codebook and os.path.exists(args.image_codebook):
+                codebook = load_codebook(args.image_codebook)
+            
+            if args.image_mode == "raster":
+                s, k = image_to_tokens_raster(img, k=args.aot_bins)
+                sr = None
+            else:  # patch mode
+                k_vq = args.image_vq_k
+                s, k, codebook = image_to_tokens_patch_vq(
+                    img, k_codebook=k_vq, patch=args.image_patch, 
+                    codebook=codebook, seed=args.seed or 0
+                )
+                sr = None
+                
+                # Save codebook if path specified
+                if args.image_codebook:
+                    save_codebook(codebook, args.image_codebook)
+            
+            rng = np.random.default_rng(args.seed) if args.seed is not None else None
+            res = aot_from_series(
+                np.array(s), k=k, R=args.order, sr=sr,
+                win=args.aot_win, stride=args.aot_stride,
+                use_diff=bool(args.aot_diff), use_logreturn=False,
+                train_frac=args.aot_train_frac, coder=args.coder, rng=rng
+            )
+            
+            print(
+                f"[AoT IMAGE] AUC={res['auc']:.3f}  bits/step={res['bits_per_step']:.6g}  "
+                f"CI=[{res['hol_ci_lo']:.6g},{res['hol_ci_hi']:.6g}]  mode={args.image_mode}"
+            )
+            result = {"file": args.aot_image, "mode": args.image_mode, **res}
+            result["cli_args"] = {
+                "seed": args.seed, "coder": args.coder, "image_mode": args.image_mode,
+                "image_patch": args.image_patch, "image_vq_k": args.image_vq_k
+            }
+            print(json.dumps(result))
+            return
+            
+        except Exception as e:
+            print(f"Error processing image {args.aot_image}: {e}")
+            return
+
+    if args.aot_video:
+        try:
+            # Load existing codebook if specified
+            codebook = None
+            if args.video_codebook and os.path.exists(args.video_codebook):
+                codebook = load_codebook(args.video_codebook)
+            
+            tokens, k, fps, codebook = video_to_tokens_vq(
+                args.aot_video, k_codebook=args.video_vq_k, down=args.video_down,
+                stride=args.video_stride, max_frames=args.video_max,
+                codebook=codebook, seed=args.seed or 0
+            )
+            
+            # Save codebook if path specified
+            if args.video_codebook:
+                save_codebook(codebook, args.video_codebook)
+            
+            rng = np.random.default_rng(args.seed) if args.seed is not None else None
+            res = aot_from_series(
+                np.array(tokens), k=k, R=args.order, sr=fps,
+                win=args.aot_win, stride=args.aot_stride,
+                use_diff=bool(args.aot_diff), use_logreturn=False,
+                train_frac=args.aot_train_frac, coder=args.coder, rng=rng
+            )
+            
+            bps = res["bits_per_second"] 
+            print(
+                f"[AoT VIDEO] AUC={res['auc']:.3f}  bits/step={res['bits_per_step']:.6g}  "
+                f"bits/s={bps if bps is not None else 'NA'}  "
+                f"CI=[{res['hol_ci_lo']:.6g},{res['hol_ci_hi']:.6g}]  fps={fps:.1f}"
+            )
+            result = {"file": args.aot_video, "fps": fps, **res}
+            result["cli_args"] = {
+                "seed": args.seed, "coder": args.coder, "video_vq_k": args.video_vq_k,
+                "video_down": args.video_down, "video_stride": args.video_stride
+            }
+            print(json.dumps(result))
+            return
+            
+        except Exception as e:
+            print(f"Error processing video {args.aot_video}: {e}")
+            return
 
     if args.scoreboard_glob:
         import glob

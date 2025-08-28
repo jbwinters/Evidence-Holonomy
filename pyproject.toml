@@ -28,6 +28,10 @@ dependencies = [
 
 [project.optional-dependencies]
 audio = ["scipy>=1.8"]
+image = ["pillow>=8.0"]
+video = ["imageio>=2.9", "imageio[ffmpeg]"]
+ml = ["scikit-learn>=1.0"]
+all = ["scipy>=1.8", "pillow>=8.0", "imageio>=2.9", "imageio[ffmpeg]", "scikit-learn>=1.0"]
 dev = ["pytest>=7", "pytest-cov>=4", "ruff>=0.5", "build>=1.0"]
 
 [project.urls]
