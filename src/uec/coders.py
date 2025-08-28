@@ -22,7 +22,8 @@ class KTMarkovMixture:
         self.k = int(alphabet_size)
         self.R = int(R)
         priors = np.array([prior_decay ** (-r) for r in range(self.R + 1)], dtype=float)
-        self.alpha = priors / priors.sum()
+        self.alpha0 = priors / priors.sum()          # <- keep a canonical prior
+        self.alpha = self.alpha0.copy()              # <- start with it
         self.tables: List[Dict[Tuple[int, ...], np.ndarray]] = [
             defaultdict(lambda: np.zeros(self.k, dtype=float))
             for _ in range(self.R + 1)
@@ -67,7 +68,7 @@ class KTMarkovMixture:
         return total
 
     def reset(self) -> None:
-        self.alpha = self.alpha * 0 + (1.0 / (self.R + 1))
+        self.alpha = self.alpha0.copy()              # <- NOT uniform anymore
         self.tables = [
             defaultdict(lambda: np.zeros(self.k, dtype=float))
             for _ in range(self.R + 1)

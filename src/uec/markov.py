@@ -81,12 +81,13 @@ def sample_markov(
     return x
 
 
-def entropy_production_rate_bits(T: np.ndarray) -> float:
+def entropy_production_rate_bits(T: np.ndarray, strict: bool = False) -> float:
     """Analytic EP for a Markov chain in bits/step.
 
     sigma = sum_{i,j} pi_i T_ij log2((pi_i T_ij)/(pi_j T_ji)).
     If detailed balance holds (pi_i T_ij == pi_j T_ji for all i,j), sigma == 0.
-    With one-way edges, the exact EP diverges; we add a large surrogate term.
+    With one-way edges, the exact EP diverges; we add a large surrogate term
+    unless strict=True, in which case we raise ValueError.
     """
     T = _row_stochastic(T)
     pi = stationary_distribution(T)
@@ -99,6 +100,8 @@ def entropy_production_rate_bits(T: np.ndarray) -> float:
                 den = pi[j] * T[j, i]
                 s += num * (math.log(num / den, 2.0))
             elif T[i, j] > 0 and T[j, i] == 0:
+                if strict:
+                    raise ValueError("EP diverges: one-way edge present (violates absolute continuity).")
                 s += (pi[i] * T[i, j]) * 1000.0
     return float(s)
 

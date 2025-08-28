@@ -27,6 +27,9 @@ def run_battery(argv: list[str] | None = None) -> None:
     p.add_argument("--k", type=int, default=3)
     p.add_argument("--order", type=int, default=3)
     p.add_argument("--fast", action="store_true")
+    p.add_argument("--strict_ep", action="store_true", help="Raise error on one-way edges")
+    p.add_argument("--coder", type=str, choices=["kt", "lz78"], default="kt", help="Coder type for KL estimates")
+    p.add_argument("--out_csv", type=str, help="Output CSV file for results")
     args = p.parse_args(argv)
 
     if args.fast:
@@ -34,16 +37,39 @@ def run_battery(argv: list[str] | None = None) -> None:
 
     print("\n=== UEC Battery (minimal): starting ===")
     # Time-reversal ≈ EP
-    T = random_markov_biased(k=args.k, delta=0.6)
-    sigma_bits = entropy_production_rate_bits(T)
-    x = sample_markov(T, n=args.n)
-    hol_rate = klrate_holonomy_time_reversal_markov(x, k=args.k, R=args.order)
+    rng = np.random.default_rng(args.seed)
+    T = random_markov_biased(k=args.k, delta=0.6, rng=rng)
+    sigma_bits = entropy_production_rate_bits(T, strict=args.strict_ep)
+    x = sample_markov(T, n=args.n, rng=rng)
+    hol_rate = klrate_holonomy_time_reversal_markov(x, k=args.k, R=args.order, coder=args.coder)
     diff = abs(hol_rate - sigma_bits)
     rel = diff / max(1e-8, abs(sigma_bits))
     print(
         f"[Time reversal] EP analytic={sigma_bits:.6g}  KL-rate hol={hol_rate:.6g}  "
         f"abs diff={diff:.3g}  rel diff={rel:.3%}"
     )
+    
+    # Write to CSV if requested
+    if args.out_csv:
+        import csv
+        import os
+        file_exists = os.path.isfile(args.out_csv)
+        with open(args.out_csv, "a", newline="") as f:
+            fieldnames = ["seed", "n", "k", "order", "sigma_true", "hol_rate", "abs_err", "rel_err"]
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            if not file_exists:
+                writer.writeheader()
+            writer.writerow({
+                "seed": args.seed,
+                "n": args.n,
+                "k": args.k,
+                "order": args.order,
+                "sigma_true": sigma_bits,
+                "hol_rate": hol_rate,
+                "abs_err": diff,
+                "rel_err": rel,
+            })
+    
     print("=== UEC Battery (minimal): done ===")
 
 
@@ -59,8 +85,11 @@ def run_aot(argv: list[str] | None = None) -> None:
     p.add_argument("--order", type=int, default=3)
     p.add_argument("--aot_diff", action="store_true")
     p.add_argument("--aot_logreturn", action="store_true")
-    p.add_argument("--aot_rate", type=float)
+    p.add_argument("--aot_rate", type=float)  # Changed from int cast
+    p.add_argument("--aot_train_frac", type=float, default=0.5, help="Fraction for training (vs test)")
+    p.add_argument("--coder", type=str, choices=["kt", "lz78"], default="kt", help="Coder type for KL estimates")
     p.add_argument("--scoreboard_glob", type=str)
+    p.add_argument("--scoreboard_csv", type=str, help="Export scoreboard to CSV file")
     p.add_argument("--seed", type=int, help="RNG seed for reproducible AoT CIs")
     args = p.parse_args(argv)
 
@@ -76,11 +105,13 @@ def run_aot(argv: list[str] | None = None) -> None:
             x,
             k=args.aot_bins,
             R=args.order,
-            sr=int(args.aot_rate) if args.aot_rate else None,
+            sr=args.aot_rate,  # No int() cast
             win=args.aot_win,
             stride=args.aot_stride,
             use_diff=bool(args.aot_diff),
             use_logreturn=bool(args.aot_logreturn),
+            train_frac=args.aot_train_frac,
+            coder=args.coder,
             rng=rng,
         )
         print(
@@ -102,6 +133,8 @@ def run_aot(argv: list[str] | None = None) -> None:
             stride=args.aot_stride,
             use_diff=bool(args.aot_diff),
             use_logreturn=False,
+            train_frac=args.aot_train_frac,
+            coder=args.coder,
             rng=rng,
         )
         bps = res["bits_per_second"]
@@ -131,6 +164,8 @@ def run_aot(argv: list[str] | None = None) -> None:
                         stride=args.aot_stride,
                         use_diff=bool(args.aot_diff),
                         use_logreturn=False,
+                        train_frac=args.aot_train_frac,
+                        coder=args.coder,
                         rng=rng,
                     )
                 else:
@@ -140,11 +175,13 @@ def run_aot(argv: list[str] | None = None) -> None:
                         x,
                         k=args.aot_bins,
                         R=args.order,
-                        sr=int(args.aot_rate) if args.aot_rate else None,
+                        sr=args.aot_rate,  # No int() cast
                         win=args.aot_win,
                         stride=args.aot_stride,
                         use_diff=bool(args.aot_diff),
                         use_logreturn=bool(args.aot_logreturn),
+                        train_frac=args.aot_train_frac,
+                        coder=args.coder,
                         rng=rng,
                     )
                 rows.append({
@@ -160,6 +197,16 @@ def run_aot(argv: list[str] | None = None) -> None:
                 print(f"[Scoreboard] Skipped {path}: {e}")
         if rows:
             print(json.dumps(rows))
+            
+            # Export to CSV if requested
+            if args.scoreboard_csv:
+                import csv
+                with open(args.scoreboard_csv, "w", newline="") as f:
+                    if rows:
+                        fieldnames = ["file", "auc", "bits_per_step", "bits_per_second", "ci_lo", "ci_hi"]
+                        writer = csv.DictWriter(f, fieldnames=fieldnames)
+                        writer.writeheader()
+                        writer.writerows(rows)
         return
 
     # if nothing provided, show help
