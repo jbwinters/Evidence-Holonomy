@@ -699,6 +699,57 @@ def test_observer_independence_trend(seed: int = 135, k: int = 3) -> None:
     ), "Per-symbol KT-LZ difference did not shrink or stabilize."
 
 
+def test_code_invariance_kt_vs_kt(
+    seed: int = 246, n: int = 150000, k: int = 3, num_windows: int = 20
+) -> None:
+    """Test KL-holonomy code invariance: KT(R=3) vs KT(R=1) should give nearly identical results."""
+    rng = np.random.default_rng(seed)
+    T = random_markov_biased(k=k, delta=0.6, rng=rng)
+    x = sample_markov(T, n=n, rng=rng)
+    
+    # Create windows for holonomy estimates
+    win_size = n // num_windows
+    windows = [x[i*win_size:(i+1)*win_size] for i in range(num_windows)]
+    
+    hol_rates_A = []  # KT with R=3, prior_decay=2.0
+    hol_rates_B = []  # KT with R=1, prior_decay=4.0
+    
+    for w in windows:
+        if len(w) < 100:  # Skip tiny windows
+            continue
+        hol_A = klrate_holonomy_time_reversal_markov(w, k=k, R=3)
+        hol_B = klrate_holonomy_time_reversal_markov(w, k=k, R=1) 
+        hol_rates_A.append(hol_A)
+        hol_rates_B.append(hol_B)
+    
+    hol_A = np.array(hol_rates_A)
+    hol_B = np.array(hol_rates_B)
+    
+    # Compute invariance metrics
+    correlation = np.corrcoef(hol_A, hol_B)[0, 1] if len(hol_A) > 1 else 1.0
+    mean_abs_diff = np.mean(np.abs(hol_A - hol_B))
+    
+    print(f"[Code invariance] KT(R=3) vs KT(R=1): r={correlation:.3f}, mean |Δ|={mean_abs_diff:.4g} bits/step")
+    
+    log_json(
+        "results/b7_code_invariance.json",
+        {
+            "seed": seed,
+            "n": n,
+            "k": k,
+            "num_windows": len(hol_A),
+            "correlation": float(correlation),
+            "mean_abs_diff": float(mean_abs_diff),
+            "hol_rates_A": hol_A.tolist(),
+            "hol_rates_B": hol_B.tolist(),
+        },
+    )
+    
+    # Assertions for code invariance: high correlation, small differences
+    assert correlation > 0.8, f"Code invariance failed: correlation {correlation:.3f} < 0.8"
+    assert mean_abs_diff < 0.1, f"Code invariance failed: mean |Δ| {mean_abs_diff:.4g} >= 0.1 bits/step"
+
+
 def sweep_random_chains_EP_vs_KL(
     seed: int = 2468,
     reps: int = 8,
@@ -1228,6 +1279,7 @@ def write_run_summary(args) -> None:
             "three_way": last_with_id("results/b4_three_way.json"),
             "observer": last_with_id("results/b5_observer.json"),
             "sweep": last_with_id("results/b6_sweep_summary.json"),
+            "code_invariance": last_with_id("results/b7_code_invariance.json"),
         },
         "deterministic": {
             "two_state": last_with_id("results/c1_two_state.json"),
@@ -1610,6 +1662,9 @@ def main():
 
         # 4) Observer-independence sanity (KT vs LZ evidence difference per symbol shrinks)
         test_observer_independence_trend(seed=args.seed + 4, k=args.k)
+        
+        # 4b) Code invariance: KT vs KT with different hyperparameters
+        test_code_invariance_kt_vs_kt(seed=args.seed + 41, n=args.n, k=args.k)
 
         # 5) Random-chain sweep aggregate statistics
         reps_sweep = max(10, args.sweep_reps) if args.long else args.sweep_reps
