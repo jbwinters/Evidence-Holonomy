@@ -22,21 +22,31 @@ from .transforms import (
 )
 
 
-def klrate_between_sequences(p_seq: Sequence[int], q_seq: Sequence[int], k: int, R: int = 3) -> float:
-    """Estimate D(P||Q) by cross-entropy difference on the same evaluation sequence.
+def klrate_between_sequences(p_seq: Sequence[int], q_seq: Sequence[int], k: int, R: int = 3, coder: str = "kt") -> float:
+    """Estimate the per-symbol KL divergence D(P||Q) using universal coding.
+    This is an estimator for the (ideal) KL-holonomy rate defined in the paper.
 
-    Trains KT(k,R) on p_seq and q_seq separately; evaluates H_P(p) and H_Q(p) on
+    Trains coders on p_seq and q_seq separately; evaluates H_P(p) and H_Q(p) on
     the same p_seq using frozen predictors; returns H_Q(p)-H_P(p) in bits/symbol.
     """
-    Pcoder = KTMarkovMixture(alphabet_size=k, R=R)
-    Pcoder.fit(p_seq)
-    Pfrozen = Pcoder.snapshot_frozen()
-    Qcoder = KTMarkovMixture(alphabet_size=k, R=R)
-    Qcoder.fit(q_seq)
-    Qfrozen = Qcoder.snapshot_frozen()
-    H_P = Pfrozen.codelen_sequence(p_seq) / max(1, len(p_seq))
-    H_PQ = Qfrozen.codelen_sequence(p_seq) / max(1, len(p_seq))
-    return float(H_PQ - H_P)
+    if coder == "kt":
+        Pcoder = KTMarkovMixture(alphabet_size=k, R=R)
+        Pcoder.fit(p_seq)
+        Pfrozen = Pcoder.snapshot_frozen()
+        Qcoder = KTMarkovMixture(alphabet_size=k, R=R)
+        Qcoder.fit(q_seq)
+        Qfrozen = Qcoder.snapshot_frozen()
+        H_P = Pfrozen.codelen_sequence(p_seq) / max(1, len(p_seq))
+        H_PQ = Qfrozen.codelen_sequence(p_seq) / max(1, len(p_seq))
+        return float(H_PQ - H_P)
+    elif coder == "lz78":
+        from .coders import LZ78Coder
+        P, Q = LZ78Coder(k), LZ78Coder(k)
+        H_P = P.total_codelen(p_seq) / max(1, len(p_seq))
+        H_PQ = Q.total_codelen(p_seq) / max(1, len(p_seq))  # crude baseline
+        return float(H_PQ - H_P)
+    else:
+        raise ValueError("coder must be 'kt' or 'lz78'")
 
 
 def klrate_holonomy_general(
@@ -46,6 +56,7 @@ def klrate_holonomy_general(
     k: int,
     R: int = 3,
     align: str = "tail",
+    coder: str = "kt",
 ) -> float:
     """KL-rate holonomy for a general loop returning to the original alphabet.
 
@@ -65,11 +76,12 @@ def klrate_holonomy_general(
         p_eval = list(seq)[:nQ]
     else:
         raise ValueError("align must be 'tail' or 'head'")
-    return klrate_between_sequences(p_eval, q_seq, k, R=R)
+    return klrate_between_sequences(p_eval, q_seq, k, R=R, coder=coder)
 
 
-def klrate_holonomy_time_reversal_markov(seq: Sequence[int], k: int, R: int = 3) -> float:
+def klrate_holonomy_time_reversal_markov(seq: Sequence[int], k: int, R: int = 3, coder: str = "kt") -> float:
     """KL-rate holonomy for the canonical Markov time-reversal loop.
+    This is an estimator for the (ideal) KL-holonomy rate defined in the paper.
 
     Loop: TransitionEncode(k) → TimeReverse() → TransitionDecodeTakeSecond(k).
     Align p_eval = seq[1:] to the transition sequence length. Returns bits/step.
@@ -79,4 +91,4 @@ def klrate_holonomy_time_reversal_markov(seq: Sequence[int], k: int, R: int = 3)
     D2 = TransitionDecodeTakeSecond(k)
     q_seq, _ = apply_loop(seq, list(range(k)), [E, Rv, D2])
     p_eval = list(seq)[1:]
-    return klrate_between_sequences(p_eval, q_seq, k, R=R)
+    return klrate_between_sequences(p_eval, q_seq, k, R=R, coder=coder)

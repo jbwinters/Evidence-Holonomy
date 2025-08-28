@@ -148,47 +148,68 @@ def window_iter(seq: Sequence[int], win: int, stride: int) -> List[List[int]]:
 
 
 def train_forward_and_reverse_models(
-    train_seq: Sequence[int], k: int, R: int
-) -> Tuple[KTFrozenPredictor, KTFrozenPredictor]:
-    """Train KT models for forward P and looped-reverse Q on the training split.
+    train_seq: Sequence[int], k: int, R: int, coder: str = "kt"
+):
+    """Train models for forward P and looped-reverse Q on the training split.
 
-    Returns frozen evaluators Pf and Qf so held-out windows can be scored as
+    Returns models/info so held-out windows can be scored as
     HQ-HP consistently with the KL holonomy time-reversal loop.
     """
-    P = KTMarkovMixture(k, R=R)
-    P.fit(train_seq)
-    Pf = P.snapshot_frozen()
-    E = TransitionEncode(k)
-    Rv = TimeReverse()
-    D2 = TransitionDecodeTakeSecond(k)
-    q_train, _ = apply_loop(train_seq, list(range(k)), [E, Rv, D2])
-    Q = KTMarkovMixture(k, R=R)
-    Q.fit(q_train)
-    Qf = Q.snapshot_frozen()
-    return Pf, Qf
+    if coder == "kt":
+        P = KTMarkovMixture(k, R=R)
+        P.fit(train_seq)
+        Pf = P.snapshot_frozen()
+        E = TransitionEncode(k)
+        Rv = TimeReverse()
+        D2 = TransitionDecodeTakeSecond(k)
+        q_train, _ = apply_loop(train_seq, list(range(k)), [E, Rv, D2])
+        Q = KTMarkovMixture(k, R=R)
+        Q.fit(q_train)
+        Qf = Q.snapshot_frozen()
+        return Pf, Qf
+    elif coder == "lz78":
+        # For LZ78, we don't need to train - just return the alphabet size
+        # The actual scoring will be done in signed_lr_score
+        return k, k  # Both P and Q use the same alphabet size
+    else:
+        raise ValueError("coder must be 'kt' or 'lz78'")
 
 
-def signed_lr_score(seq: Sequence[int], Pf: KTFrozenPredictor, Qf: KTFrozenPredictor) -> float:
+def signed_lr_score(seq: Sequence[int], Pf, Qf, coder="kt") -> float:
     """Return per-symbol signed LR score: H_Q(seq) - H_P(seq)."""
     n = max(1, len(seq))
-    HQ = Qf.codelen_sequence(seq) / n
-    HP = Pf.codelen_sequence(seq) / n
-    return float(HQ - HP)
+    if coder == "kt":
+        HQ = Qf.codelen_sequence(seq) / n
+        HP = Pf.codelen_sequence(seq) / n
+        return float(HQ - HP)
+    elif coder == "lz78":
+        from .coders import LZ78Coder
+        # For LZ78 baseline - Pf and Qf would be alphabet size, not frozen predictors
+        k = Pf if isinstance(Pf, int) else 2  # fallback
+        P, Q = LZ78Coder(k), LZ78Coder(k)
+        n = max(1, len(seq))
+        HP = P.total_codelen(seq) / n
+        HQ = Q.total_codelen(seq) / n
+        return float(HQ - HP)
+    else:
+        raise ValueError("coder must be 'kt' or 'lz78'")
 
 
 def aot_from_series(
     x_raw: np.ndarray,
     k: int = 8,
     R: int = 3,
-    sr: int | None = None,
+    sr: float | int | None = None,
     train_frac: float = 0.5,
     win: int = 4096,
     stride: int = 2048,
     B: int = 200,
     block_wins: int = 10,
+    block_seconds: float | None = None,
     rng: np.random.Generator | None = None,
     use_diff: bool = False,
     use_logreturn: bool = False,
+    coder: str = "kt",
 ) -> dict:
     """Compute AoT metrics for a real-valued series.
 
@@ -217,26 +238,30 @@ def aot_from_series(
         raise ValueError(
             f"Not enough test data for the chosen window size (len(test)={len(test)}, win={win})."
         )
-    Pf, Qf = train_forward_and_reverse_models(train, k, R)
+    Pf, Qf = train_forward_and_reverse_models(train, k, R, coder)
     wins_fwd = window_iter(test, win, stride)
     E_win, Rv_win, D2_win = TransitionEncode(k), TimeReverse(), TransitionDecodeTakeSecond(k)
     wins_q = [apply_loop(w, list(range(k)), [E_win, Rv_win, D2_win])[0] for w in wins_fwd]
-    scores_fwd = np.array([signed_lr_score(w, Pf, Qf) for w in wins_fwd], dtype=float)
-    scores_rev = np.array([signed_lr_score(wq, Pf, Qf) for wq in wins_q], dtype=float)
+    scores_fwd = np.array([signed_lr_score(w[1:], Pf, Qf, coder) for w in wins_fwd], dtype=float)
+    scores_rev = np.array([signed_lr_score(wq, Pf, Qf, coder) for wq in wins_q], dtype=float)
     auc = auc_from_scores(scores_fwd, scores_rev)
-    hol_rate = klrate_holonomy_time_reversal_markov(test, k=k, R=R)
+    hol_rate = klrate_holonomy_time_reversal_markov(test, k=k, R=R, coder=coder)
     vals: List[float] = []
     for w in wins_fwd:
         qw, _ = apply_loop(w, list(range(k)), [E_win, Rv_win, D2_win])
         if len(w) > 1 and len(qw) > 0:
-            vals.append(klrate_between_sequences(w[1:], qw, k, R))
+            vals.append(klrate_between_sequences(w[1:], qw, k, R, coder))
     if len(vals) == 0:
         mean = hol_rate
         lo = hol_rate
         hi = hol_rate
     else:
         arr = np.array(vals, dtype=float)
-        block = max(1, int(block_wins))
+        # Calculate block size from time if block_seconds is provided
+        if block_seconds is not None and sr is not None:
+            block = max(1, int(block_seconds * sr / stride))
+        else:
+            block = max(1, int(block_wins))
         blocks = [arr[i : i + block].mean() for i in range(0, len(arr) - block + 1, block)]
         if len(blocks) < 2:
             mean = float(np.mean(arr))
@@ -267,4 +292,7 @@ def aot_from_series(
         "hol_ci_hi": float(hi),
         "n_train": int(ntr),
         "n_test": int(len(test)),
+        "n_windows": len(wins_fwd),
+        "bootstrap_B": int(B),
+        "bootstrap_block_wins": block if block_seconds is None else int(block_wins),
     }
