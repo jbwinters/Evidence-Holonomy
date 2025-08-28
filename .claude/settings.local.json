@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Git__git_diff_staged",
+      "mcp__Git__git_status",
+      "Bash(mkdir:*)",
+      "Bash(python -m pytest tests/test_holonomy.py -v)",
+      "Bash(python -m pytest tests/test_uec_battery.py::TestUtilities::test_set_seeds -v)",
+      "Bash(python -m pytest tests/test_markov.py::test_row_stochastic tests/test_transforms.py::TestPermute::test_permute_basic tests/test_aot.py::test_quantile_bins -v)",
+      "Bash(python -m pytest tests/test_transforms.py::TestPermute::test_permute_basic tests/test_aot.py::test_quantile_bins -v)",
+      "Bash(python -m pytest tests/test_aot.py::test_quantile_bins -v)",
+      "Bash(python -m pytest tests/test_markov.py::test_sample_markov tests/test_markov.py::test_sample_HMM tests/test_aot.py::test_train_forward_and_reverse_models tests/test_aot.py::test_signed_lr_score -v)",
+      "Bash(python -m pytest tests/ --tb=no -q)",
+      "Bash(python -m pytest tests/test_aot.py::test_aot_edge_cases tests/test_cli.py::TestRunAoT::test_run_aot_scoreboard_mode tests/test_markov.py::test_random_markov_biased tests/test_uec_battery.py::TestUtilities::test_row_stochastic tests/test_uec_battery.py::TestAoTUtils::test_auc_from_scores tests/test_uec_battery.py::TestAoTUtils::test_aot_from_series_with_preprocessing tests/test_uec_battery.py::TestLongRunning::test_full_battery_simulation -v)",
+      "Bash(python -m pytest tests/test_aot.py::test_aot_edge_cases tests/test_cli.py::TestRunAoT::test_run_aot_scoreboard_mode tests/test_uec_battery.py::TestLongRunning::test_full_battery_simulation -v)",
+      "Bash(python -m pytest tests/test_cli.py::TestRunAoT::test_run_aot_scoreboard_mode -v)",
+      "Bash(python -m pytest tests/test_aot.py::test_load_wav_mono -v)",
+      "Bash(python -m pytest tests/test_cli.py::TestRunAoT::test_run_aot_wav -v)",
+      "Bash(uec-battery:*)",
+      "Bash(export PYTHONPATH=src)",
+      "Bash(python:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
