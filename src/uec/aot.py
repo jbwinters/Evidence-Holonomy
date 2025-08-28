@@ -222,7 +222,7 @@ def aot_from_series(
     """Compute AoT metrics for a real-valued series.
 
     - Discretizes the series (optionally after first-diff or log-returns).
-    - Trains KT models on forward train split and looped-reverse of train.
+    - Trains models (KT or LZ78) on forward train split and looped-reverse of train.
     - Computes signed LR scores HQ-HP on held-out windows; reports AUC.
     - Estimates KL-rate holonomy on held-out test and a simple block-bootstrap CI.
     - If sr is provided, also reports bits/second (bits/step * sr).
@@ -250,8 +250,27 @@ def aot_from_series(
     wins_fwd = window_iter(test, win, stride)
     E_win, Rv_win, D2_win = TransitionEncode(k), TimeReverse(), TransitionDecodeTakeSecond(k)
     wins_q = [apply_loop(w, list(range(k)), [E_win, Rv_win, D2_win])[0] for w in wins_fwd]
-    scores_fwd = np.array([signed_lr_score(w[1:], Pf, Qf, coder) for w in wins_fwd], dtype=float)
-    scores_rev = np.array([signed_lr_score(wq, Pf, Qf, coder) for wq in wins_q], dtype=float)
+    
+    if coder == "lz78":
+        from .coders import LZ78Coder
+        # forward windows: score = codelen(loop(w)) - codelen(w[1:])
+        scores_fwd = np.array([
+            LZ78Coder(k).total_codelen(qw)/max(1, len(qw)) 
+            - LZ78Coder(k).total_codelen(w[1:])/max(1, len(w)-1)
+            for w, qw in zip(wins_fwd, wins_q)
+        ], dtype=float)
+
+        # reversed windows: apply loop again to wq for symmetry
+        wins_qq = [apply_loop(wq, list(range(k)), [E_win, Rv_win, D2_win])[0] for wq in wins_q]
+        scores_rev = np.array([
+            LZ78Coder(k).total_codelen(qq)/max(1, len(qq))
+            - LZ78Coder(k).total_codelen(wq[1:])/max(1, len(wq)-1)
+            for wq, qq in zip(wins_q, wins_qq)
+        ], dtype=float)
+    else:
+        # existing KT path - use full windows like uec_battery.py
+        scores_fwd = np.array([signed_lr_score(w, Pf, Qf, coder) for w in wins_fwd], dtype=float)
+        scores_rev = np.array([signed_lr_score(wq, Pf, Qf, coder) for wq in wins_q], dtype=float)
     auc = auc_from_scores(scores_fwd, scores_rev)
     hol_rate = klrate_holonomy_time_reversal_markov(test, k=k, R=R, coder=coder)
     vals: List[float] = []
@@ -259,17 +278,19 @@ def aot_from_series(
         qw, _ = apply_loop(w, list(range(k)), [E_win, Rv_win, D2_win])
         if len(w) > 1 and len(qw) > 0:
             vals.append(klrate_between_sequences(w[1:], qw, k, R, coder))
+    
+    # Calculate block size from time if block_seconds is provided
+    if block_seconds is not None and sr is not None:
+        block = max(1, int(block_seconds * sr / stride))
+    else:
+        block = max(1, int(block_wins))
+    
     if len(vals) == 0:
         mean = hol_rate
         lo = hol_rate
         hi = hol_rate
     else:
         arr = np.array(vals, dtype=float)
-        # Calculate block size from time if block_seconds is provided
-        if block_seconds is not None and sr is not None:
-            block = max(1, int(block_seconds * sr / stride))
-        else:
-            block = max(1, int(block_wins))
         blocks = [arr[i : i + block].mean() for i in range(0, len(arr) - block + 1, block)]
         if len(blocks) < 2:
             mean = float(np.mean(arr))
@@ -315,6 +336,6 @@ def aot_from_series(
         "n_test": int(len(test)),
         "n_windows": len(wins_fwd),
         "bootstrap_B": int(B),
-        "bootstrap_block_wins": block if block_seconds is None else int(block_wins),
+        "bootstrap_block_wins": int(block),
         "metadata": metadata,
     }

@@ -5,6 +5,7 @@
 \usepackage{hyperref}
 \usepackage{thmtools}
 \usepackage{bm}
+\usepackage{booktabs}
 
 \hypersetup{
   colorlinks=true,
@@ -58,12 +59,33 @@ A \emph{universal code} on alphabet $\mathcal{A}$ is a map $\code_{\mathcal{A}}:
 \end{equation}
 with convergence also in $L^1(Q)$. Classical examples include LZ78, Krichevsky--Trofimov mixtures for finite-order Markov models, and CTW \cite{ziv1978,kt1981,willems1995ctw,shields1996,csiszarshields2004}.
 
+\paragraph{Standing assumptions.}
+Unless stated otherwise, alphabets are finite; processes are stationary and ergodic;
+and when KL rates are finite we assume absolute continuity $P\ll Q$.
+All identities are per-symbol, up to $O(1)$ boundary terms (negligible when divided by $n$).
+All logs are base 2.
+
 \paragraph{Representation transforms and loops.}
-For each $n$, let $F_{i,n}$ be a measurable map $F_{i,n}:\X_{i-1}^{n_{i-1}(n)}\to\X_i^{n_i(n)}$, where the alphabets $\X_i$ may differ by step, and $n_0(n)=n$. Define successive images
-\[
-x^{(0)} = x \in \X^n,\quad x^{(i)} = F_{i,n}\circ\cdots\circ F_{1,n}(x^{(0)}) \in \X_i^{n_i(n)}.
-\]
-A finite list $\gamma=(F_{1,n},\ldots,F_{m,n})$ is a \emph{loop at scale $n$} if $n_m(n)=n$ and $\X_m=\X_0=\X$. Let $L_n=F_{m,n}\circ\cdots\circ F_{1,n}:\X^n\to\X^n$ be the loop map and let $Q_n := (L_n)\push P_n$ (hence $Q_n$ is a law on $\X^n$).
+For each $n$, let $F_{i,n}$ be a measurable map
+$F_{i,n}:\X_{i-1}^{\,n_{i-1}(n)}\to\X_i^{\,n_i(n)}$, where the alphabets
+$\X_i$ may differ by step, and $n_0(n)=n$. Define successive images
+$x^{(0)}=x\in\X^n$ and $x^{(i)} = F_{i,n}\circ\cdots\circ F_{1,n}(x^{(0)}) \in \X_i^{\,n_i(n)}$.
+A finite list $\gamma=(F_{1,n},\ldots,F_{m,n})$ is a \emph{loop at scale $n$}
+if $\X_m=\X_0=\X$ and $n_m(n)=n+O(1)$. We write $L_n=F_{m,n}\circ\cdots\circ F_{1,n}$.
+When $n_m(n)\neq n$, evaluations are aligned by truncating/offsetting one argument
+(e.g., ``tail alignment'' $X_{1:n-1}$ versus a length $n\!-\!1$ loop output);
+this contributes only $O(1)$ boundary terms, negligible after dividing by $n$.
+
+\paragraph{Why `holonomy'?}
+In differential geometry, holonomy measures the failure of a vector to return unchanged after
+parallel transport around a closed loop; the effect depends on the connection and reflects curvature.
+Here, the `vector' is a description length (or log-likelihood) assigned by an observer (a code),
+the `connection' is the rule transporting this observer along a loop of representation transforms,
+and the holonomy is the net change after completing the loop.
+Zero holonomy corresponds to flatness (e.g., bijective relabelings), whereas coarse-grainings or
+time-reversal in nonequilibrium systems induce positive `curvature' detected by nonzero holonomy.
+This analogy motivates the terminology and clarifies why observer choice acts like a gauge: our
+KL-holonomy rate is asymptotically gauge-invariant across universal codes.
 
 \subsection{Two holonomy functionals}
 
@@ -77,14 +99,23 @@ Given universal codes $\code_{\X_i}$ for intermediate alphabets, define
 \end{definition}
 
 \begin{definition}[KL (observer-transported) holonomy]\label{def:holonomy-kl}
-Let $\code_\X^{(P)}$ and $\code_\X^{(Q)}$ be universal on $\X$ for $P$ and for the stationary pushforward $Q$ with marginals $Q_n$, respectively. Define the \emph{code-based} estimator
+Let $P_n$ be the law of $X_{0:n-1}$ and $Q_n=(L_n)\# P_n$. Define the ideal codelengths
+$\mathcal{L}^{(P)}_n(x)=-\log_2 P_n(x)$ and $\mathcal{L}^{(Q)}_n(x)=-\log_2 Q_n(x)$.
+The (ideal) KL holonomy is
 \[
-\mathrm{Hol}_{n}^{\mathrm{KL},\gamma}(x) := \code_\X^{(Q)}(x) - \code_\X^{(P)}(x).
+\mathrm{Hol}^{\mathrm{KL},\gamma}_n(x) \;=\; \mathcal{L}^{(Q)}_n(x) - \mathcal{L}^{(P)}_n(x)
+\;=\; \log_2 \frac{P_n(x)}{Q_n(x)}.
 \]
-Operationally, $\code_\X^{(Q)}$ is the universal code trained on samples from $Q$ (e.g., loop-transformed training sequences) but \emph{evaluated on the original sequence} $x$; hence it estimates $-\log_2 Q_n(x)$, so that $\mathrm{Hol}_{n}^{\mathrm{KL},\gamma}$ estimates $\log_2 \frac{P_n(x)}{Q_n(x)}$.
+Hence $\tfrac{1}{n}\E_P[\mathrm{Hol}^{\mathrm{KL},\gamma}_n] = \tfrac{1}{n}\KL(P_n\|Q_n) \to \mathsf{d}(P\|Q)$.
+\emph{Implementation note.} In experiments we approximate $\mathcal{L}^{(P)}_n$ and $\mathcal{L}^{(Q)}_n$
+with universal coders; under standard log-loss consistency for the model class used, the empirical
+rates converge in $L^1$ to the ideal ones.
 \end{definition}
 
 \section{Reductions via Universality}
+
+\noindent\emph{Convention.} All statements below are per symbol, with $O(1)$
+boundary discrepancies (e.g., from alignment) absorbed into the $o(1)$ terms.
 
 \begin{lemma}[Pointwise reductions]\label{lem:pointwise}
 Assume \eqref{eq:universality} for the relevant laws.
@@ -93,7 +124,7 @@ Assume \eqref{eq:universality} for the relevant laws.
 \begin{equation}\label{eq:hol-out-reduction}
 \frac{1}{n}\Big(\mathrm{Hol}_{n}^{\mathrm{out},\gamma}(X_{0:n-1}) - \log_2\frac{P_n(X_{0:n-1})}{Q_n(L_n(X_{0:n-1}))}\Big) \xrightarrow[n\to\infty]{P\text{-a.s.}} 0.
 \end{equation}
-\item For $\mathrm{Hol}^{\mathrm{KL}}$:
+\item For $\mathrm{Hol}^{\mathrm{KL},\gamma}$:
 \begin{equation}\label{eq:hol-kl-reduction}
 \frac{1}{n}\Big(\mathrm{Hol}_{n}^{\mathrm{KL},\gamma}(X_{0:n-1}) - \log_2\frac{P_n(X_{0:n-1})}{Q_n(X_{0:n-1})}\Big) \xrightarrow[n\to\infty]{P\text{-a.s.}} 0.
 \end{equation}
@@ -146,15 +177,51 @@ Let $K_n$ be a (possibly many-to-one) Markov kernel on $\X^n$ and $R_n$ any meas
 \[
 \frac{1}{n}\,\E_P\big[\mathrm{Hol}_{n}^{\mathrm{KL},\gamma}\big] \to \mathsf{d}(P\|Q) \ge 0,
 \]
-i.e.\ KL holonomy is non-negative by construction (data-processing monotonicity of KL under channels \cite[Ch.~2]{coverthomas}).
+i.e.\ KL holonomy is non-negative by construction (by non-negativity of KL).
+Moreover, if both $P_n$ and $Q_n$ are mapped through the same observation channel,
+data processing yields a lower bound on the holonomy of the observed records.
+
+\paragraph{When is the pushforward stationary?}
+For a general sequence of maps $L_n$, the marginals $Q_n=(L_n)\#P_n$ need not be the $n$-marginals of any stationary process.
+A sufficient condition is that the loop arises from a shift-commuting, finite-memory map on the two-sided shift
+(a sliding-block code): i.e., there exist $F$ and memory $m$ such that $(L_n(x))_t = F(x_{t-m:t+m})$ for all $t$,
+and $F$ commutes with the left-shift.
+Then, if $P$ is stationary, so is the pushforward process $Q$. The canonical time-reversal loop and
+coarse-graining channels satisfy this property. In our theorems that invoke entropy-rate limits for $Q$,
+we implicitly assume such a stationary extension exists (or restrict to cases where it is direct, e.g. time reversal).
 
 \subsection{Time reversal and entropy production for Markov chains}
 
-Let $P$ be a stationary Markov chain on $\X=\{1,\dots,k\}$ with transition $T$ and stationary $\pi$. Its time-reversal $P^{\mathrm{rev}}$ has transitions $T^\ast_{ji}=\frac{\pi_i T_{ij}}{\pi_j}$. For length $n$, let $R_n$ denote reversal of the string. Consider the canonical loop
-\[
-\textsf{Encode transitions}\ \to\ \textsf{Reverse}\ \to\ \textsf{Decode second},
-\]
-which maps paths back to $\X^n$ (up to a boundary symbol). For Markov $P$, the pushforward law $Q$ induced by this loop coincides with the path law of $P^{\mathrm{rev}}$ on cylinders.
+Let $P$ be a stationary Markov chain on $\X=\{1,\dots,k\}$ with transition $T$ and stationary $\pi$. Its time-reversal $P^{\mathrm{rev}}$ has transitions $T^\ast_{ji}=\frac{\pi_i T_{ij}}{\pi_j}$. 
+
+\paragraph{Canonical time-reversal loop.}
+Let $x_{0:n-1}$ be a path from a stationary finite-state Markov chain $P$ with transition matrix $T$.
+Define three maps on paths of length $n$:
+(i) the transition encoder $E$ mapping $(x_{t-1},x_t)_{t=1}^{n-1}$ to the edge sequence;
+(ii) reversal $R$ mapping an edge sequence $(e_1,\dots,e_{n-1})$ to $(e_{n-1},\dots,e_1)$;
+(iii) a state decoder $D$ that reconstructs a path from the reversed edge sequence given the terminal
+state $x_{n-1}$ as anchor.
+The loop is $L_n := D \circ R \circ E$. One checks that $(L_n)\# P_n = P_n^{\mathrm{rev}}$,
+the $n$-path law of the time-reversed chain.
+
+\begin{quote}
+\textbf{Algorithm:} Time-reversal loop $L_n$\\
+\textbf{Input:} $x_{0:n-1}$\\
+1. $E \leftarrow ((x_{t-1},x_t))_{t=1}^{n-1}$\\
+2. $E' \leftarrow \mathrm{reverse}(E)$\\
+3. $\hat{x}_{n-1} \leftarrow x_{n-1}$ \quad (anchor)\\
+4. For $t=n-1$ down to $1$:\\
+\quad Set $\hat{x}_{t-1}$ as the unique predecessor such that $(\hat{x}_{t-1},\hat{x}_{t})=E'_{n-t}$\\
+\textbf{Output:} $L_n(x)=\hat{x}_{0:n-1}$
+\end{quote}
+
+\begin{remark}[Practical variant]
+Our implementation uses a length-$n\!-\!1$ variant:
+encode transitions, reverse, and \emph{decode the second state} of each reversed
+edge. We then evaluate on $X_{1:n-1}$ to match lengths. This avoids explicit
+anchoring by $x_{n-1}$ and differs only by $O(1)$ boundary terms, hence the
+per-symbol limits are unchanged.
+\end{remark}
 
 \begin{theorem}[KL holonomy rate equals entropy production]\label{thm:EP}
 For the Markov setting above,
@@ -175,6 +242,11 @@ The path log-likelihood ratio between $P$ and the reversed path law under $P^{\m
 \]
 The stationary term telescopes to $O(1)$; divide by $n$ and take expectations. Identity \eqref{eq:EP_rate} is standard in stochastic thermodynamics \cite{schnakenberg1976,seifert2012}. Equation \eqref{eq:EP_hol} is \eqref{eq:exp-kl} with $Q=P^{\mathrm{rev}}$.
 \end{proof}
+
+\begin{remark}[Absolute continuity]
+The rate in \eqref{eq:EP_rate} is finite iff $T_{ij}>0 \Rightarrow T_{ji}>0$
+for all $i,j$; otherwise $\mathsf{d}(P\|P^{\mathrm{rev}})=+\infty$.
+\end{remark}
 
 \begin{remark}[Why not merely $h(Q)-h(P)$?]
 For stationary Markov chains, $h(P)=h(P^{\mathrm{rev}})$, so representation-space holonomy would vanish. The KL version (observer-transported) returns the irreversible production $\sigma$.
@@ -205,7 +277,16 @@ All code and data are available at: \url{https://github.com/josh-winters/holonom
 
 \section{Numerical validation (UEC battery)}
 
-All experiments were run with the companion script \texttt{uec\_battery.py}. The suite covers: (i) gauge invariance under bijective recoding; (ii) coarse-graining/refinement loops (non-negativity of KL holonomy); (iii) Markov time-reversal, where KL holonomy matches the analytic entropy production (EP) $\sigma$ in bits/step; (iv) observer-independence trends (KT vs.\ LZ code lengths per symbol converge); (v) robustness sweeps (random chains, low/high EP regimes, alignment/segment stability), and (vi) bootstrap confidence intervals for windowed estimates.
+We validate the theoretical predictions across window sizes $n \in \{2^9, 2^{11}, 2^{13}, 2^{15}\}$ and multiple random seeds. For synthetic Markov chains, we compare ground-truth entropy production $\sigma$ with KL-holonomy rate estimates (Table~\ref{tab:markov}, Figure~\ref{fig:markov-conv}). The median relative error converges to under 10\% for $n \geq 2^{11}$ across different chain types.
+
+Observer independence was tested by comparing KL-holonomy estimates from
+different universal coders: KT with varying Markov orders ($R \in \{1,3\}$) and 
+prior decay parameters. These yield nearly identical rates across windows 
+(Figure~\ref{fig:code-invariance}: $r > 0.99$, mean $|\Delta| < 10^{-6}$ bits/step).
+We also include an LZ78 \emph{representation-space} baseline that computes 
+$h(Q)-h(P)$ via separate compression rather than cross-entropy. While LZ78 
+captures similar irreversibility trends, it measures a different functional 
+than KL-holonomy $\mathsf{d}(P\|Q)$.
 
 \paragraph{AoT demos (audio / sensors / finance).} For window-level arrow-of-time classification, two choices align AUC with holonomy and our theory: \emph{loop-negatives}
 (Encode$\to$Reverse$\to$DecodeSecond) instead of literal reversal, and domain preprocessing (\texttt{--aot\_diff} for audio/sensors, \texttt{--aot\_logreturn} for finance). These match the time-reversal loop used by the holonomy and avoid negative-KL pathologies. The script logs per-file AUC and bits/step(/s) and writes a scoreboard CSV.
@@ -218,10 +299,28 @@ All experiments were run with the companion script \texttt{uec\_battery.py}. The
 \end{itemize}
 Representative commands and flags for the AoT demos are documented inline in the repository (e.g., \texttt{--aot\_bins}, \texttt{--aot\_win}, \texttt{--aot\_stride}, \texttt{--aot\_rate}).
 
+\input{results/table_markov_sanity}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.9\linewidth]{figures/markov_convergence.pdf}
+  \caption{Estimated KL-holonomy rate vs. window length $n$; horizontal line is $\sigma_{\text{true}}$.}
+  \label{fig:markov-conv}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.85\linewidth]{figures/code_invariance_scatter.pdf}
+  \caption{Code invariance: KL-holonomy rate from KT($R=3$) vs. KT($R=1$) across windows. Points lie tightly along the diagonal ($r > 0.99$, mean $|\Delta| < 10^{-6}$ bits/step), demonstrating that the KL-holonomy functional is robust to coder hyperparameters.}
+  \label{fig:code-invariance}
+\end{figure}
+
 \section*{Discussion}
 We distinguished two operational regimes. If one evaluates evidence \emph{in the representation reached by the loop}, holonomy reduces to the \emph{entropy-rate difference} $h(Q)-h(P)$ (Theorem~\ref{thm:exp_reductions}); this yields gauge invariance and detects net compression/expansion by the loop. If instead one \emph{transports the observer} and evaluates evidence against the loop's pushforward law on the \emph{original coordinates}, holonomy equals the \emph{relative entropy rate} $\mathsf{d}(P\|Q)$, recovering irreversibility and, for Markov time reversal, the entropy production rate.
 
 \paragraph{Technical extensions.} The finite-alphabet assumption can be relaxed via quantization and standard approximation. The Markov time-reversal equality extends to hidden Markov models at the level of path measures; holonomy on observed records gives a certified lower bound by data processing (and in the quantum setting by Lindblad/Uhlmann monotonicity \cite{lindblad1975,uhlmann1977}). Absolute continuity requirements ensure finite rates (e.g., $\sigma<\infty$ requires $T_{ij}>0 \Rightarrow T_{ji}>0$).
+
+\paragraph{Limitations \& scope.} Our framework requires finite alphabets and stationarity for entropy-rate convergence arguments. Universal code approximations introduce finite-sample error that decreases as $O(\log n/n)$ under standard conditions. The pushforward stationarity condition (sliding-block property) restricts the class of admissible loops but covers the main examples of interest.
 
 \section*{Acknowledgements}
 Portions of the text were drafted or revised with assistance from OpenAI's GPT-5. The author verified all content and takes full responsibility for the paper.
