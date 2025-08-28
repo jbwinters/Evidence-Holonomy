@@ -1,0 +1,2 @@
+seed,n,k,order,sigma_true,hol_rate,abs_err,rel_err
+1,2048,3,3,0.033465235305059446,0.0,0.033465235305059446,1.0

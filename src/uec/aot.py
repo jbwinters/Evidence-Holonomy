@@ -56,11 +56,11 @@ def load_csv_column(path: str, column: str | int = 0, skip_header: bool = True) 
     return x
 
 
-def load_wav_mono(path: str) -> Tuple[np.ndarray, int]:
+def load_wav_mono(path: str, target_std: float = 1.0) -> Tuple[np.ndarray, int]:
     """Load mono audio and sampling rate from a WAV file.
 
     Tries SciPy's wavfile; falls back to robust stdlib parsing for 8/16/24/32-bit
-    PCM, averaging channels and normalizing to unit variance.
+    PCM, averaging channels and normalizing to target_std variance.
     """
     try:
         from scipy.io import wavfile  # type: ignore
@@ -70,7 +70,15 @@ def load_wav_mono(path: str) -> Tuple[np.ndarray, int]:
         if wav.ndim > 1:
             wav = wav.mean(axis=1)
         x = wav.astype(float)
-        x = (x - x.mean()) / (x.std() + 1e-12)
+        
+        # Check if already float (don't re-center by integer offset)
+        if not np.issubdtype(wav.dtype, np.floating):
+            x = (x - x.mean()) / (x.std() + 1e-12) * target_std
+        else:
+            # For float WAVs, normalize to target_std without integer centering
+            current_std = x.std()
+            if current_std > 1e-12:
+                x = x / current_std * target_std
         return x, int(sr)
     except Exception:
         import wave
@@ -111,7 +119,7 @@ def load_wav_mono(path: str) -> Tuple[np.ndarray, int]:
             data = data[:total_samples]
             data = data.reshape(-1, nchan).mean(axis=1)
         vals = data.astype(float)
-        x = (vals - vals.mean()) / (vals.std() + 1e-12)
+        x = (vals - vals.mean()) / (vals.std() + 1e-12) * target_std
         return x, int(fr)
 
 
@@ -277,6 +285,19 @@ def aot_from_series(
             hi = float(np.percentile(boot, 97.5))
     bits_per_step = float(hol_rate)
     bits_per_second = (bits_per_step * sr) if sr is not None else None
+    
+    # Add determinism metadata for reproducibility
+    metadata = {
+        "numpy_version": np.__version__,
+        "coder": coder,
+    }
+    try:
+        import os
+        if "GIT_COMMIT" in os.environ:
+            metadata["git_commit"] = os.environ["GIT_COMMIT"]
+    except ImportError:
+        pass
+    
     return {
         "k": int(k),
         "R": int(R),
@@ -295,4 +316,5 @@ def aot_from_series(
         "n_windows": len(wins_fwd),
         "bootstrap_B": int(B),
         "bootstrap_block_wins": block if block_seconds is None else int(block_wins),
+        "metadata": metadata,
     }

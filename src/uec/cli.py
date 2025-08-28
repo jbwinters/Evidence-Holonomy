@@ -87,6 +87,7 @@ def run_aot(argv: list[str] | None = None) -> None:
     p.add_argument("--aot_logreturn", action="store_true")
     p.add_argument("--aot_rate", type=float)  # Changed from int cast
     p.add_argument("--aot_train_frac", type=float, default=0.5, help="Fraction for training (vs test)")
+    p.add_argument("--target_std", type=float, default=1.0, help="Target standard deviation for WAV normalization")
     p.add_argument("--coder", type=str, choices=["kt", "lz78"], default="kt", help="Coder type for KL estimates")
     p.add_argument("--scoreboard_glob", type=str)
     p.add_argument("--scoreboard_csv", type=str, help="Export scoreboard to CSV file")
@@ -118,11 +119,18 @@ def run_aot(argv: list[str] | None = None) -> None:
             f"[AoT CSV] AUC={res['auc']:.3f}  bits/step={res['bits_per_step']:.6g}  "
             f"CI=[{res['hol_ci_lo']:.6g},{res['hol_ci_hi']:.6g}]"
         )
-        print(json.dumps({"file": args.aot_csv, **res}))
+        result = {"file": args.aot_csv, **res}
+        # Add CLI metadata
+        result["cli_args"] = {
+            "seed": args.seed,
+            "coder": args.coder,
+            "target_std": args.target_std,
+        }
+        print(json.dumps(result))
         return
 
     if args.aot_wav:
-        x, sr = load_wav_mono(args.aot_wav)
+        x, sr = load_wav_mono(args.aot_wav, target_std=args.target_std)
         rng = np.random.default_rng(args.seed) if args.seed is not None else None
         res = aot_from_series(
             x,
@@ -143,7 +151,14 @@ def run_aot(argv: list[str] | None = None) -> None:
             f"bits/s={bps if bps is not None else 'NA'}  "
             f"CI=[{res['hol_ci_lo']:.6g},{res['hol_ci_hi']:.6g}]  sr={sr}Hz"
         )
-        print(json.dumps({"file": args.aot_wav, **res}))
+        result = {"file": args.aot_wav, **res}
+        # Add CLI metadata
+        result["cli_args"] = {
+            "seed": args.seed,
+            "coder": args.coder,
+            "target_std": args.target_std,
+        }
+        print(json.dumps(result))
         return
 
     if args.scoreboard_glob:
@@ -153,7 +168,7 @@ def run_aot(argv: list[str] | None = None) -> None:
         for idx, path in enumerate(glob.glob(args.scoreboard_glob)):
             try:
                 if path.lower().endswith(".wav"):
-                    x, sr = load_wav_mono(path)
+                    x, sr = load_wav_mono(path, target_std=args.target_std)
                     rng = (None if base_rng is None else np.random.default_rng(base_rng.integers(0, 2**32)))
                     res = aot_from_series(
                         x,

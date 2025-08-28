@@ -41,10 +41,13 @@ def klrate_between_sequences(p_seq: Sequence[int], q_seq: Sequence[int], k: int,
         return float(H_PQ - H_P)
     elif coder == "lz78":
         from .coders import LZ78Coder
-        P, Q = LZ78Coder(k), LZ78Coder(k)
-        H_P = P.total_codelen(p_seq) / max(1, len(p_seq))
-        H_PQ = Q.total_codelen(p_seq) / max(1, len(p_seq))  # crude baseline
-        return float(H_PQ - H_P)
+        # LZ78 baseline: compare compression lengths directly
+        # NOTE: This is NOT a true KL-holonomy estimate! LZ78 is not universal
+        # in the pointwise sense. This serves only as a sanity check baseline.
+        P_len = LZ78Coder(k).total_codelen(p_seq) / max(1, len(p_seq))
+        Q_len = LZ78Coder(k).total_codelen(q_seq) / max(1, len(q_seq))
+        # Return difference in per-symbol compression
+        return float(Q_len - P_len)
     else:
         raise ValueError("coder must be 'kt' or 'lz78'")
 
@@ -65,8 +68,10 @@ def klrate_holonomy_general(
     - Guards: final alphabet size must be k; loop output must be non-empty.
     """
     q_seq, aQ = apply_loop(seq, alphabet, loop)
-    if len(aQ) != k:
-        raise ValueError("Final loop output must be in the original alphabet.")
+    m = len(aQ)
+    if m != k:
+        raise ValueError(f"Final loop output alphabet size ({m}) must equal k ({k}); "
+                        f"got final_alphabet={aQ[:10]}{'...' if len(aQ) > 10 else ''}")
     nQ = len(q_seq)
     if nQ <= 0:
         raise ValueError("Loop produced empty sequence; cannot evaluate KL-rate.")
@@ -74,8 +79,18 @@ def klrate_holonomy_general(
         p_eval = list(seq)[-nQ:]
     elif align == "head":
         p_eval = list(seq)[:nQ]
+    elif align == "auto":
+        # Choose alignment based on length change
+        if nQ < len(seq):
+            p_eval = list(seq)[-nQ:]  # tail for shortening
+        elif nQ > len(seq):
+            p_eval = list(seq)[:nQ]   # head for lengthening (pad with zeros if needed)
+            if len(p_eval) < nQ:
+                p_eval = p_eval + [0] * (nQ - len(p_eval))
+        else:
+            p_eval = list(seq)  # same length
     else:
-        raise ValueError("align must be 'tail' or 'head'")
+        raise ValueError("align must be 'tail', 'head', or 'auto'")
     return klrate_between_sequences(p_eval, q_seq, k, R=R, coder=coder)
 
 
