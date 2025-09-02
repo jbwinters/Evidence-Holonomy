@@ -69,6 +69,22 @@ class TransitionDecodeTakeSecond(Transform):
         return out, list(range(self.k))
 
 
+class TransitionEncodeLag(Transform):
+    def __init__(self, k: int, tau: int = 1):
+        self.k = int(k)
+        self.tau = int(tau)
+
+    def apply(self, seq, alphabet):
+        x = list(seq)
+        y = []
+        n = len(x)
+        if self.tau <= 0:
+            return [], list(range(self.k * self.k))
+        for t in range(0, max(0, n - self.tau)):
+            y.append(int(x[t]) * self.k + int(x[t + self.tau]))
+        return y, list(range(self.k * self.k))
+
+
 class Downsample(Transform):
     def __init__(self, step: int = 2):
         self.step = int(step)
