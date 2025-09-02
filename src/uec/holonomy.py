@@ -16,6 +16,7 @@ from .coders import KTMarkovMixture
 from .transforms import (
     TransitionDecodeTakeSecond,
     TransitionEncode,
+    TransitionEncodeLag,
     TimeReverse,
     apply_loop,
     Transform,
@@ -106,4 +107,23 @@ def klrate_holonomy_time_reversal_markov(seq: Sequence[int], k: int, R: int = 3,
     D2 = TransitionDecodeTakeSecond(k)
     q_seq, _ = apply_loop(seq, list(range(k)), [E, Rv, D2])
     p_eval = list(seq)[1:]
+    return klrate_between_sequences(p_eval, q_seq, k, R=R, coder=coder)
+
+
+def klrate_holonomy_leadlag_markov(
+    seq: Sequence[int], k: int, tau: int = 1, R: int = 3, coder: str = "kt"
+) -> float:
+    """KL-rate holonomy using a lead–lag loop at lag tau.
+
+    Loop: TransitionEncodeLag(k, tau) → TimeReverse() → TransitionDecodeTakeSecond(k).
+    Align p_eval = seq[tau:] to the lag-encoded transition sequence length.
+    Returns bits/step.
+    """
+    if tau <= 0:
+        return 0.0
+    E = TransitionEncodeLag(k, tau=tau)
+    Rv = TimeReverse()
+    D2 = TransitionDecodeTakeSecond(k)
+    q_seq, _ = apply_loop(seq, list(range(k)), [E, Rv, D2])
+    p_eval = list(seq)[tau:]
     return klrate_between_sequences(p_eval, q_seq, k, R=R, coder=coder)
