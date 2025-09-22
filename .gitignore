@@ -42,3 +42,6 @@ results/
 
 # Local datasets (keep small WAVs under data/wav/, ignore Kaggle dumps)
 data/kaggle/**
+
+# Finance scripts (keep local but don't track)
+scripts/finance/
