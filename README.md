@@ -185,9 +185,3 @@ Audio samples under `data/wav/` are from Freesound.org and used for AoT demos. S
 ## Assumptions and Safe Operation
 
 See `docs/assumptions.md` for refined theoretical assumptions (finite alphabet, stationarity, ergodicity, sufficiency, loop closure) and practical “Check / Work‑around / Relax” guidance.
-
-The BTC UEC analysis (`scripts/btc_uec_analysis.py`) logs:
-- Loop closure alignment and chosen alphabet size `k`.
-- Sufficiency warnings when `n << 50·k^R` (train) or `10·k^R` (eval).
-- Support overlap issues (forward `i→j` seen while reverse `j→i` never seen).
-- Stationarity split deltas (first vs second half code‑rates).
