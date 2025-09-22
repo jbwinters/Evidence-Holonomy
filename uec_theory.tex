@@ -273,7 +273,7 @@ Apply Lemma~\ref{lem:pointwise} to both codes and subtract.
 
 \section{Code \& Data}
 
-All code and data are available at: \url{https://github.com/josh-winters/holonomy}
+All code and data are available at: \url{https://github.com/jbwinters/Evidence-Holonomy}
 
 \section{Numerical validation (UEC battery)}
 
@@ -301,14 +301,14 @@ Representative commands and flags for the AoT demos are documented inline in the
 
 \input{results/table_markov_sanity}
 
-\begin{figure}[t]
+\begin{figure}[h!]
   \centering
   \includegraphics[width=0.9\linewidth]{figures/markov_convergence.pdf}
   \caption{Estimated KL-holonomy rate vs. window length $n$; horizontal line is $\sigma_{\text{true}}$.}
   \label{fig:markov-conv}
 \end{figure}
 
-\begin{figure}[t]
+\begin{figure}[h!]
   \centering
   \includegraphics[width=0.85\linewidth]{figures/code_invariance_scatter.pdf}
   \caption{Code invariance: KL-holonomy rate from KT($R=3$) vs. KT($R=1$) across windows. Points lie tightly along the diagonal ($r > 0.99$, mean $|\Delta| < 10^{-6}$ bits/step), demonstrating that the KL-holonomy functional is robust to coder hyperparameters.}
