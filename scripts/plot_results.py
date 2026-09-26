@@ -1,175 +1,88 @@
 #!/usr/bin/env python3
 """
-Generate figures for the paper from experimental results.
+Generate the paper's figures from the ancillary CSVs in anc/.
+
+Every plotted point comes from anc/*.csv, produced by scripts/paper_experiments.py.
+Outputs PDF (for the paper) and PNG (for the README) under figures/.
 """
+
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import pandas as pd
-import numpy as np
-from pathlib import Path
 
-plt.style.use('seaborn-v0_8-whitegrid')
-plt.rcParams.update({
-    'font.size': 11,
-    'axes.titlesize': 12,
-    'axes.labelsize': 11,
-    'xtick.labelsize': 10,
-    'ytick.labelsize': 10,
-    'legend.fontsize': 10,
-})
+plt.rcParams.update({"font.size": 10, "axes.titlesize": 11, "legend.fontsize": 9})
+COLORS = {3: "#1f77b4", 4: "#ff7f0e", 5: "#2ca02c"}
 
-def plot_markov_convergence():
-    """Figure 1: KL-holonomy convergence to σ."""
-    try:
-        df = pd.read_csv('anc/markov_sanity.csv')
-    except FileNotFoundError:
-        print("Warning: markov_sanity.csv not found, skipping convergence plot")
-        return
-    
-    fig, ax = plt.subplots(figsize=(10, 6))
-    
-    # Define colors and markers for each chain size
-    colors = {'3': '#1f77b4', '4': '#ff7f0e', '5': '#2ca02c'}
-    markers = {'3': 'o', '4': 's', '5': '^'}
-    
-    # Plot each chain type separately
-    for k in sorted(df['k'].unique()):
-        subset = df[df['k'] == k]
-        
-        # Group by n, compute statistics for this chain type
-        stats = subset.groupby('n').agg({
-            'sigma_true': 'mean',
-            'hol_rate': ['mean', 'std'],
-            'rel_err': ['mean', 'std']
-        })
-        
-        if len(stats) == 0:
-            continue
-            
-        n_values = stats.index
-        sigma_true_mean = stats[('sigma_true', 'mean')]
-        hol_mean = stats[('hol_rate', 'mean')]
-        hol_std = stats[('hol_rate', 'std')]
-        
-        # Plot estimated holonomy with error bars
-        ax.errorbar(n_values, hol_mean, yerr=hol_std, 
-                    marker=markers[str(k)], capsize=4, capthick=1.5, 
-                    label=f'{k}-state KL-holonomy', color=colors[str(k)],
-                    markersize=6, linewidth=1.5)
-        
-        # Plot true entropy production for this chain type
-        ax.plot(n_values, sigma_true_mean, 
-                '--', linewidth=2, color=colors[str(k)], alpha=0.8,
-                label=f'{k}-state true $\\sigma$')
-    
-    ax.set_xlabel('Window length $n$')
-    ax.set_ylabel('Entropy production (bits/step)')
-    ax.set_xscale('log', base=2)
-    ax.set_title('Convergence of KL-holonomy to entropy production rate')
-    ax.legend(loc='upper left', fontsize=9, framealpha=0.9)
-    ax.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    plt.savefig('figures/markov_convergence.pdf', dpi=300, bbox_inches='tight')
-    plt.savefig('figures/markov_convergence.png', dpi=300, bbox_inches='tight')
-    print("Saved: figures/markov_convergence.pdf")
-    plt.close()
 
-def plot_code_invariance():
-    """Figure 2: Code invariance scatter plot."""
-    # Create a synthetic demonstration of the claimed KT(R=3) vs KT(R=1) comparison
-    # since the current data compares wrong functionals (KT vs LZ78)
-    
-    print("Creating synthetic code invariance plot (KT R=3 vs R=1)")
-    print("Note: Current data compares KT vs LZ78 (different functionals)")
-    
-    # Generate synthetic but realistic data for KT(R=3) vs KT(R=1)
-    # Based on the markov sanity data patterns
-    np.random.seed(42)
-    n_points = 20
-    
-    # Base rates from actual KT data, with small perturbations for R=1 vs R=3
-    base_rates = np.array([0.05, 0.08, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85,
-                          0.95, 1.05, 0.33, 0.26, 0.18, 0.12, 0.67, 0.94, 0.44, 0.22])
-    
-    # KT(R=3) rates (baseline)
-    kt_r3 = base_rates + np.random.normal(0, 0.01, n_points)
-    
-    # KT(R=1) rates (very close to R=3, showing code invariance)
-    kt_r1 = kt_r3 + np.random.normal(0, 0.005, n_points)  # Smaller variance for invariance
-    
-    # Ensure all positive
-    kt_r3 = np.abs(kt_r3)
-    kt_r1 = np.abs(kt_r1)
-    
-    fig, ax = plt.subplots(figsize=(6, 6))
-    
-    # Scatter plot
-    ax.scatter(kt_r3, kt_r1, alpha=0.7, s=50, color='blue', edgecolors='black', linewidth=0.5)
-    
-    # y=x reference line
-    min_val = min(kt_r3.min(), kt_r1.min())
-    max_val = max(kt_r3.max(), kt_r1.max())
-    ax.plot([min_val, max_val], [min_val, max_val], 
-            'r--', linewidth=2, alpha=0.8, label='y = x')
-    
-    # Statistics
-    r = np.corrcoef(kt_r3, kt_r1)[0, 1]
-    mean_delta = np.abs(kt_r3 - kt_r1).mean()
-    
-    ax.set_xlabel('KT($R=3$) holonomy rate (bits/step)')
-    ax.set_ylabel('KT($R=1$) holonomy rate (bits/step)')
-    ax.set_title(f'Code invariance: KT($R=3$) vs KT($R=1$)\\n($r={r:.3f}$, mean $|\\Delta|={mean_delta:.6f}$)')
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-    
-    # Equal aspect ratio for better visual comparison
-    ax.set_aspect('equal', adjustable='box')
-    
-    plt.tight_layout()
-    plt.savefig('figures/code_invariance_scatter.pdf', dpi=300, bbox_inches='tight')
-    plt.savefig('figures/code_invariance_scatter.png', dpi=300, bbox_inches='tight')
-    print("Saved: figures/code_invariance_scatter.pdf")
-    plt.close()
+def _save(fig, name: str) -> None:
+    fig.tight_layout()
+    for ext in ("pdf", "png"):
+        fig.savefig(f"figures/{name}.{ext}", dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Saved: figures/{name}.pdf")
 
-def plot_error_vs_n():
-    """Additional plot: Relative error vs window size."""
-    try:
-        df = pd.read_csv('anc/markov_sanity.csv')
-    except FileNotFoundError:
-        return
-    
-    fig, ax = plt.subplots(figsize=(8, 5))
-    
-    # Box plots of relative error by n
-    n_values = sorted(df['n'].unique())
-    rel_errs = [df[df['n'] == n]['rel_err'] for n in n_values]
-    
-    bp = ax.boxplot(rel_errs, positions=range(len(n_values)), 
-                    patch_artist=True, boxprops=dict(facecolor='lightblue'))
-    
-    ax.set_xlabel('Window length $n$')
-    ax.set_ylabel('Relative error')
-    ax.set_yscale('log')
-    ax.set_xticks(range(len(n_values)))
-    ax.set_xticklabels([f'$2^{{{int(np.log2(n))}}}$' for n in n_values])
-    ax.set_title('Relative error vs window size')
-    ax.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    plt.savefig('figures/error_vs_n.pdf', dpi=300, bbox_inches='tight')
-    plt.savefig('figures/error_vs_n.png', dpi=300, bbox_inches='tight')
-    print("Saved: figures/error_vs_n.pdf")
-    plt.close()
+
+def plot_markov_convergence() -> None:
+    """Figure 1: estimate / sigma for each chain as n grows."""
+    df = pd.read_csv("anc/markov_sanity.csv")
+    df["ratio"] = df["estimate"] / df["sigma_true"]
+    fig, ax = plt.subplots(figsize=(6.5, 4))
+    for (seed, k), g in df.groupby(["seed", "k"]):
+        g = g.sort_values("n")
+        ax.plot(g["n"], g["ratio"], "-o", color=COLORS[k], alpha=0.45, ms=3, lw=1)
+    med = df.groupby("n")["ratio"].median()
+    ax.plot(med.index, med.values, "k-", lw=2.5, label="median over 15 chains")
+    for k, c in COLORS.items():
+        ax.plot([], [], "-o", color=c, ms=3, label=f"{k}-state chains")
+    ax.axhline(1.0, color="gray", ls="--", lw=1)
+    ax.set_xscale("log", base=2)
+    ax.set_xlabel("sample length $n$")
+    ax.set_ylabel(r"estimate / $\sigma_{\mathrm{true}}$")
+    ax.set_ylim(0, max(2.5, float(df["ratio"].max()) * 1.05))
+    ax.legend(loc="upper right")
+    ax.set_title("Time-reversal estimate relative to analytic entropy production")
+    _save(fig, "markov_convergence")
+
+
+def plot_calibration() -> None:
+    """Figure 2: estimate vs sigma for 60 random chains at n = 2^15."""
+    df = pd.read_csv("anc/calibration.csv")
+    fig, ax = plt.subplots(figsize=(4.8, 4.5))
+    for k, g in df.groupby("k"):
+        ax.scatter(g["sigma_true"], g["estimate"], s=18, color=COLORS[k], label=f"{k}-state", alpha=0.8)
+    hi = float(max(df["sigma_true"].max(), df["estimate"].max())) * 1.05
+    ax.plot([0, hi], [0, hi], "k--", lw=1, label="$y=x$")
+    ax.set_xlim(0, hi)
+    ax.set_ylim(0, hi)
+    ax.set_xlabel(r"analytic $\sigma$ (bits/step)")
+    ax.set_ylabel(r"estimate, $R=3$, $n=2^{15}$ (bits/step)")
+    ax.legend(loc="upper left")
+    ax.set_title("Calibration across 60 random chains")
+    _save(fig, "calibration")
+
+
+def plot_hmm_order_sweep() -> None:
+    """Figure 3: observed-record estimates vs Markov order R for a hidden ring."""
+    df = pd.read_csv("anc/hmm_order_sweep.csv")
+    sigma_hidden = float(df["sigma_hidden"].iloc[0])
+    fig, ax = plt.subplots(figsize=(5.5, 4))
+    for name, color in (("noisy", "#9467bd"), ("lumped", "#8c564b")):
+        g = df[df["channel"] == name].groupby("order")["estimate"]
+        mean = g.mean()
+        ax.errorbar(mean.index, mean.values, yerr=[mean - g.min(), g.max() - mean],
+                    marker="o", capsize=3, color=color, label=f"observed record: {name} channel")
+    ax.axhline(sigma_hidden, color="k", ls="--", lw=1, label=r"hidden-chain $\sigma$")
+    ax.set_xlabel("KT mixture order $R$")
+    ax.set_ylabel("estimate (bits/step)")
+    ax.set_ylim(bottom=min(0.0, float(df["estimate"].min()) * 1.1))
+    ax.legend(loc="center right")
+    ax.set_title("Observed irreversibility of a hidden ring ($n=2^{17}$, 3 seeds)")
+    _save(fig, "hmm_order_sweep")
+
 
 if __name__ == "__main__":
-    print("Generating figures...")
-    
-    # Create figures directory
-    Path('figures').mkdir(exist_ok=True)
-    
+    Path("figures").mkdir(exist_ok=True)
     plot_markov_convergence()
-    plot_code_invariance() 
-    plot_error_vs_n()
-    
-    print("Figure generation complete.")
+    plot_calibration()
+    plot_hmm_order_sweep()

@@ -1,54 +1,22 @@
 #!/bin/bash
-set -e
+# Build an arXiv source bundle: uec_theory_arxiv.tar.gz in the repository root.
+# The paper's ancillary data and code go under anc/, as arXiv expects.
+set -euo pipefail
 
-echo "=== Packaging for arXiv Submission ==="
+OUT=arxiv_submission
+rm -rf "$OUT"
+mkdir -p "$OUT/figures" "$OUT/tables" "$OUT/anc"
 
-# Create arXiv submission directory
-mkdir -p arxiv_submission
-cd arxiv_submission
+cp uec_theory.tex "$OUT/"
+cp figures/markov_convergence.pdf figures/calibration.pdf figures/hmm_order_sweep.pdf "$OUT/figures/"
+cp tables/*.tex "$OUT/tables/"
+cp anc/*.csv "$OUT/anc/"
+cp -r src/uec "$OUT/anc/uec"
+cp scripts/paper_experiments.py scripts/summarize.py scripts/plot_results.py "$OUT/anc/"
+find "$OUT" -name '__pycache__' -type d -prune -exec rm -rf {} +
 
-# Copy main tex file
-cp ../uec_theory.tex .
+tar -czf uec_theory_arxiv.tar.gz -C "$OUT" .
+rm -rf "$OUT"
 
-# Copy figures
-mkdir -p figures
-cp ../figures/*.pdf figures/
-
-# Copy ancillary files  
-mkdir -p anc
-cp ../anc/*.csv anc/
-cp ../anc/README_anc.md anc/
-
-# Copy essential scripts for reproducibility
-mkdir -p scripts
-cp ../scripts/reproduce_all.sh scripts/
-cp ../scripts/summarize.py scripts/
-cp ../scripts/plot_results.py scripts/
-
-# Copy source code
-mkdir -p src
-cp -r ../src/uec src/
-
-# Create submission tarball
-tar -czf ../uec_theory_arxiv_submission.tar.gz .
-
-cd ..
-
-echo ""
-echo "=== arXiv Submission Package Ready ==="
-echo ""
-echo "Main files:"
-echo "  uec_theory.tex - Main paper"
-echo "  figures/ - PDF figures for paper"
-echo "  anc/ - Ancillary CSV data files"
-echo "  src/ - Complete UEC library source"
-echo "  scripts/ - Reproducibility scripts"
-echo ""
-echo "Submission file: uec_theory_arxiv_submission.tar.gz"
-echo ""
-echo "To submit:"
-echo "1. Upload the .tar.gz file to arXiv"
-echo "2. Use category: cs.IT (Information Theory)"
-echo "3. Cross-list: cond-mat.stat-mech"
-echo "4. Comments: 'Code: https://github.com/josh-winters/holonomy'"
-echo "5. License: CC BY 4.0"
+echo "Wrote uec_theory_arxiv.tar.gz"
+echo "Code: https://github.com/jbwinters/Evidence-Holonomy"
