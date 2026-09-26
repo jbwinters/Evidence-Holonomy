@@ -48,11 +48,11 @@ A stationary Markov chain that breaks detailed balance is out of equilibrium, an
 
 A stationary Markov chain with transition matrix $T$ and stationary law $\pi$ is \emph{reversible}, or satisfies detailed balance, if $\pi_iT_{ij}=\pi_jT_{ji}$ for all states $i,j$. Detailed balance holds at thermodynamic equilibrium. Its violation shows that the system is driven, for example by ATP hydrolysis in molecular motors or by external forcing in active matter. The entropy production rate $\sigma$ measures the violation, and many methods estimate it from observed trajectories (Section~\ref{sec:related}).
 
-We study a different question: how to decide, while data arrive, whether detailed balance is broken. A recording is rarely analysed once at a length fixed in advance. Experimenters look as the data accumulate and stop when the evidence seems convincing, and classical tests lose their guarantees under this practice. In our simulations of reversible chains (Section~\ref{sec:experiments}), a likelihood-ratio test calibrated to 5\% at a fixed sample size raised false alarms in 23.9--35.5\% of runs when checked 10 times, and in 44.5--59.8\% when checked at 221 points along the trajectory.
+We study a question that comes before estimation: how to decide, while data arrive, whether detailed balance is broken. A recording is rarely analysed once at a length fixed in advance. Experimenters look as the data accumulate and stop when the evidence seems convincing, and classical tests lose their guarantees under this practice. In our simulations of reversible chains (Section~\ref{sec:experiments}), a likelihood-ratio test calibrated to 5\% at a fixed sample size raised false alarms in 23.9--35.5\% of runs when checked 10 times, and in 44.5--59.8\% when checked at 221 points along the trajectory.
 
 Section~\ref{sec:rate} identifies the rate that governs this decision. Against the composite null ``some reversible chain,'' the expected log-evidence of any valid test grows at most at rate $\rho$, the Kullback--Leibler rate from $T$ to its nearest reversible chain $(T+T^\ast)/2$. We show that $\rho\le\sigma/2$, that $\rho\approx\sigma/4$ near equilibrium, and that $\rho$ is finite even when $\sigma$ is infinite. The nearest reversible chain is known \cite{wolfer2021,andrieux2025}, and the resulting bound on detection time, $\E[\tau]\gtrsim\log_2(1/\alpha)/\rho$, is a special case of a general result of Sethi et al.\ \cite{sethi2026}. What is new is the closed form of the rate for this null and its relation to $\sigma$.
 
-Sections~\ref{sec:likelihood} and~\ref{sec:loop} give two tests. The first is an e-process built by running maximum likelihood \cite{wasserman2020}. Its evidence grows at exactly rate $\rho$, but it pays a model-selection cost of order $(k(k-1)/2)\log t$ bits, which dominates at practical significance levels. The generalized-likelihood test of \cite{sethi2026}, applied to this null, is a close relative with the same cost. The second, the loop test, is our main methodological contribution. Under detailed balance, each loop through a reference state is as likely as its reversal, so the loop's orientation is a fair coin. Betting on orientations gives a test that is valid at every sample size under continuous monitoring and needs no constrained optimization. Its overhead is small: for $\rho\le0.02$ bits/step it captures 92--100\% of the optimal rate.
+Sections~\ref{sec:likelihood} and~\ref{sec:loop} give two tests. The first is an e-process built by running maximum likelihood \cite{wasserman2020}. Its evidence grows at exactly rate $\rho$, but it pays a model-selection cost of order $(k(k-1)/2)\log t$ bits, which dominates at practical significance levels. The generalized-likelihood test of \cite{sethi2026}, applied to this null, is a close relative with the same cost. The second, the loop test, is our main methodological contribution. Under detailed balance, each loop through a reference state is as likely as its reversal, so the loop's orientation is a fair coin. Betting on orientations gives an anytime-valid test, one that may be checked after every observation, and it needs no constrained optimization. Its overhead is small: for $\rho\le0.02$ bits/step it captures 92--100\% of the optimal rate.
 
 Section~\ref{sec:experiments} checks these claims in simulation. Both tests hold their level under repeated monitoring, and the loop test does so when checked after every step. The evidence grows at the predicted rates. For $\rho<0.07$, the loop test detects broken detailed balance within 1.7--1.9 times the sample size of an idealized fixed-sample test.
 
@@ -116,7 +116,7 @@ Let $T$ be irreducible and irreversible, and let $P$ denote the law of the chain
 \[
 \E_P[\tau]\ \ge\ \frac{d(1-\beta\,\|\,\alpha)-c_T}{\rho},
 \]
-where $d(p\|q)=p\log_2\frac pq+(1-p)\log_2\frac{1-p}{1-q}$ and $c_T=\max h-\min h$, with $h$ defined in the proof, depends only on $T$. As $\alpha,\beta\to0$, the bound is $(1+o(1))\log_2(1/\alpha)/\rho$.
+where $d(p\|q)=p\log_2\frac pq+(1-p)\log_2\frac{1-p}{1-q}$, and $c_T=\max h-\min h$ is the oscillation of the solution $h$ of the Poisson equation $(I-T)h=\bar g-\rho\mathbf 1$ defined in the proof; it depends only on $T$. As $\alpha,\beta\to0$, the bound is $(1+o(1))\log_2(1/\alpha)/\rho$.
 \end{enumerate}
 Part (b) is the reversible-null case of the general lower bound of Sethi et al.\ \cite[Thm.~3.3]{sethi2026}, whose denominator, the infimum over the null of a stationary-weighted KL divergence, equals $\rho$ by Lemma~\ref{lem:projection}. We include a self-contained proof.
 \end{theorem}
@@ -133,16 +133,16 @@ expresses $L_\tau-\rho\tau$ as a martingale with bounded increments plus a term 
 \end{proof}
 
 \begin{remark}[Why $\rho$ and not $\sigma$]
-Roldán et al.\ \cite{roldan2015} test the direction of time's arrow against a simple null, the chain's own time reversal $P^\ast$, and their evidence accrues at rate $\KL(P\|P^\ast)=\sigma$. Our null is composite. Its least favorable member is $M$, not $P^\ast$, so evidence accrues at rate $\KL(P\|M)=\rho\le\sigma/2$. Asking whether a system is at equilibrium at all, without specifying which equilibrium, is harder than asking which way time runs.
+Roldán et al.\ \cite{roldan2015} test the direction of time's arrow against a simple null, the chain's own time reversal $P^\ast$, and their evidence accrues at rate $\KL(P\|P^\ast)=\sigma$. Our null is composite. Its least favorable member is $M$, not $P^\ast$, so evidence accrues at rate $\lim_t\frac1t\KL(P_t\|P^M_t)=\rho\le\sigma/2$. Asking whether a system is at equilibrium at all, without specifying which equilibrium, is harder than asking which way time runs.
 \end{remark}
 
 \section{A rate-optimal likelihood e-process}\label{sec:likelihood}
 
-Let $C_{ij}(t)$ count the transitions $i\to j$ among the first $t$, and let $q_{s-1}(j\mid i)=(C_{ij}(s-1)+\frac12)/(\sum_jC_{ij}(s-1)+\frac k2)$ be the Krichevsky--Trofimov (KT) predictor \cite{kt1981}. Define
+Let $C_{ij}(t)$ count the transitions $i\to j$ among the first $t$, and let $q_{s-1}(j\mid i)=(C_{ij}(s-1)+\frac12)/(\sum_lC_{il}(s-1)+\frac k2)$ be the Krichevsky--Trofimov (KT) predictor \cite{kt1981}. Define
 \[
 E_t=\frac{\prod_{s=1}^tq_{s-1}(x_s\mid x_{s-1})}{\sup_{Q\ \text{reversible}}\prod_{s=1}^tQ(x_{s-1},x_s)}.
 \]
-The denominator is the reversible maximum likelihood, over all $Q$ satisfying Kolmogorov's criterion, including reducible ones. We compute it with the standard self-consistent iteration $X_{ij}\leftarrow(C_{ij}+C_{ji})/(N_i/x_i+N_j/x_j)$, with $Q_{ij}=X_{ij}/x_i$ \cite{trendelkamp2015}.
+The denominator is the reversible maximum likelihood, over all $Q$ satisfying Kolmogorov's criterion, including reducible ones. We compute it with the standard self-consistent iteration $X_{ij}\leftarrow(C_{ij}+C_{ji})/(N_i/x_i+N_j/x_j)$ on a symmetric matrix $X$, where $N_i=\sum_jC_{ij}$ and $x_i=\sum_jX_{ij}$; the maximizer is $Q_{ij}=X_{ij}/x_i$ \cite{trendelkamp2015}.
 
 \begin{proposition}[Validity]\label{prop:ui}
 Under $\Hnull$, $(E_t)$ is an e-process. In particular, $P(\exists t:E_t\ge1/\alpha)\le\alpha$ for any initial state.
@@ -164,9 +164,9 @@ By Theorem~\ref{thm:lower}(a), $(E_t)$ is growth-rate optimal. At finite $t$, ho
 
 \section{The loop test}\label{sec:loop}
 
-\paragraph{Construction.} Count time in transitions. Let $B=10k$ and let $r$ be the most frequent state among $x_0,\dots,x_B$, with ties going to the lowest index. From the first time $t\ge B$ with $x_t=r$, cut the path into \emph{loops} $e=(r,y_1,\dots,y_{m-1},r)$ that leave $r$ and return to it. Let $\bar e$ denote the reversed loop. When a loop that started at time $t_0$ closes, multiply $E$ (initially 1) by
+\paragraph{Construction.} Count time in transitions. Let $B=10k$ and let $r$ be the most frequent state among $x_0,\dots,x_B$, with ties going to the lowest index. From the first time $t\ge B$ with $x_t=r$, cut the path into \emph{loops} $e=(y_0,y_1,\dots,y_m)$ with $y_0=y_m=r$ and $y_s\ne r$ for $0<s<m$. Let $\bar e$ denote the reversed loop. When a loop that started at time $t_0$ closes, multiply $E$ (initially 1) by
 \[
-\frac{2\,q(e)}{q(e)+q(\bar e)},\qquad q(e)=\prod_{s}q(y_{s+1}\mid y_s),\quad q(\bar e)=\prod_sq(y_s\mid y_{s+1}),
+\frac{2\,q(e)}{q(e)+q(\bar e)},\qquad q(e)=\prod_{s=1}^mq(y_s\mid y_{s-1}),\quad q(\bar e)=\prod_{s=1}^mq(y_{s-1}\mid y_s),
 \]
 where $q$ is the KT estimate from all transitions $1,\dots,t_0$, frozen at the loop's start. Palindromic loops give a factor of exactly 1. Reject reversibility the first time $E\ge1/\alpha$.
 
@@ -174,7 +174,7 @@ where $q$ is the KT estimate from all transitions $1,\dots,t_0$, frozen at the l
 Under $\Hnull$, $P(\exists t:E_t\ge1/\alpha)\le\alpha$.
 \end{theorem}
 \begin{proof}
-By the strong Markov property, each loop is independent of the past at its start, including the choice of $r$ (which uses only $x_0,\dots,x_B$) and the frozen estimate. For a loop $e=(z_0=r,z_1,\dots,z_m=r)$, the probability of traversing it from $r$ is $P(e)=\prod_{s=1}^mT_{z_{s-1}z_s}$, and that of its reversal is $P(\bar e)=\prod_{s=1}^mT_{z_sz_{s-1}}$. Kolmogorov's criterion makes these equal. Given the unordered pair $\{e,\bar e\}$ and the past, the observed orientation is therefore a fair coin, and each factor has conditional mean $\frac{q(e)}{q(e)+q(\bar e)}+\frac{q(\bar e)}{q(e)+q(\bar e)}=1$. Indexed by completed loops, $E$ is a nonnegative martingale with initial value 1. It is constant between completions, so its supremum over all steps equals its supremum over completions. Ville's inequality gives the claim. If $r$ is never revisited, no loop closes and $E\equiv1$.
+By the strong Markov property, each loop is independent of the past at its start, including the choice of $r$ (which uses only $x_0,\dots,x_B$) and the frozen estimate. For a loop $e=(y_0,\dots,y_m)$, the probability of traversing it from $r$ is $P(e)=\prod_{s=1}^mT_{y_{s-1}y_s}$, and that of its reversal is $P(\bar e)=\prod_{s=1}^mT_{y_sy_{s-1}}$. Kolmogorov's criterion makes these equal. Given the unordered pair $\{e,\bar e\}$ and the past, the observed orientation is therefore a fair coin, and each factor has conditional mean $\frac{q(e)}{q(e)+q(\bar e)}+\frac{q(\bar e)}{q(e)+q(\bar e)}=1$. Indexed by completed loops, $E$ is a nonnegative martingale with initial value 1. It is constant between completions, so its supremum over all steps equals its supremum over completions. Ville's inequality gives the claim. If $r$ is never revisited, no loop closes and $E\equiv1$.
 \end{proof}
 
 \begin{remark}[Fixed times]\label{rem:fixed}
@@ -182,7 +182,7 @@ For each fixed $t$, $\E_Q[E_t]=1$ under every $Q\in\Hnull$. Given the path up to
 \end{remark}
 
 \begin{remark}[What is not claimed]
-$(E_t)$ is not an e-process with respect to all step-level stopping times. A stopping rule that inspects a partially completed loop learns about that loop's orientation and can make $\E[E_\tau]$ exceed 1. The AI-assisted review described in Section~\ref{sec:experiments} found such a rule, with $\E[E_\tau]\approx1.18$. Fixed times are safe (Remark~\ref{rem:fixed}). The guarantee is Theorem~\ref{thm:loop}: a level-$\alpha$ test that may be checked after every step. For the same reason, averaging the processes for different reference states is not covered, because they evolve on different clocks.
+$(E_t)$ is not an e-process with respect to all step-level stopping times. A stopping rule that inspects a partially completed loop learns about that loop's orientation and can make $\E[E_\tau]$ exceed 1. The AI-assisted review described in Section~\ref{sec:experiments} found such a rule, with $\E[E_\tau]\approx1.18$. Fixed times are safe (Remark~\ref{rem:fixed}). The guarantee is Theorem~\ref{thm:loop}: the loop test is an anytime-valid level-$\alpha$ test. For the same reason, averaging the processes for different reference states is not covered, because they evolve on different clocks.
 \end{remark}
 
 \paragraph{Efficiency.} With oracle knowledge of $T$, the evidence per loop is $\E[\log_2(2P(e)/(P(e)+P(\bar e)))]$. Divided by the mean loop length, this is at most $\rho$, by Theorem~\ref{thm:lower}(a) and Remark~\ref{rem:fixed}. Table~\ref{tab:efficiency} gives the ratio. For $\rho\le0.02$ bits/step, loop orientations carry 92--100\% of the available evidence. At $\rho\approx0.06$ they carry 80\%, and far from equilibrium as little as 34\%, because the test discards within-loop information. Chains that far from equilibrium are still detected within about a hundred steps.
@@ -200,11 +200,11 @@ $(E_t)$ is not an e-process with respect to all step-level stopping times. A sto
 
 All experiments are seeded; \texttt{scripts/sequential\_experiments.py} regenerates the ancillary files in \texttt{anc/}, and \texttt{scripts/sequential\_tables.py} and \texttt{scripts/plot\_sequential.py} regenerate the tables and figures. Throughout, $\alpha=0.05$ and chains start from their stationary law.
 
-\paragraph{Validity.} Table~\ref{tab:validity} and Figure~\ref{fig:validity} report false-alarm rates over 1{,}000 trajectories of 20{,}000 steps for each reversible setting. The loop test is checked after every step. The likelihood e-process is checked at 303 checkpoints: every step up to 64, then a geometric grid. The likelihood-ratio test (LRT) is evaluated in three ways: once, at the planned $n=20{,}000$; at 10 geometrically spaced looks from step 100; and at all 221 checkpoints from step 100. The LRT uses the $\chi^2$ reference distribution with $(k-1)(k-2)/2$ degrees of freedom, the number of independent cycle constraints on a complete graph.
+\paragraph{Validity.} Table~\ref{tab:validity} and Figure~\ref{fig:validity} report false-alarm rates over 1{,}000 trajectories of 20{,}000 steps for each reversible setting. The loop test is checked after every step. The likelihood e-process is checked at 303 checkpoints: every step up to 64, then a geometric grid. The likelihood-ratio test (LRT) is evaluated in three ways: once, at the planned $n=20{,}000$; at 10 geometrically spaced looks from step 100; and at the 221 of those 303 checkpoints that come at or after step 100. The LRT uses the $\chi^2$ reference distribution with $(k-1)(k-2)/2$ degrees of freedom, the number of independent cycle constraints on a complete graph.
 
-Both anytime tests stay within level. The likelihood e-process raised no false alarms in 8{,}000 runs; it is conservative, as its overhead predicts. The LRT is calibrated at its planned sample size (4.2--5.7\%) but rejects 23.9--35.5\% of reversible trajectories when checked 10 times and 44.5--59.8\% when checked at all 221 checkpoints. The birth--death chain's transition graph is a tree, so the chain is always reversible and every loop factor is exactly 1.
+Both anytime tests stay within level. The likelihood e-process raised no false alarms in 8{,}000 runs; it is conservative, as its overhead predicts. The LRT is calibrated at its planned sample size (4.2--5.7\%) but rejects 23.9--35.5\% of reversible trajectories when checked 10 times and 44.5--59.8\% when checked at all 221 checkpoints. The birth--death chain's transition graph is a tree, so every loop factor is exactly 1 (Section~\ref{sec:loop}).
 
-Three settings observe a reversible hidden chain through a noisy or lumping channel. The observed processes are reversible but not Markov, so no theorem above covers them. The loop test's false-alarm rate there is 2.6--4.5\%, which is within level. This is evidence, not a guarantee.
+Three settings observe a reversible hidden chain through a noisy or lumping channel. The observed processes are reversible but not Markov, so no theorem above covers them. The loop test's false-alarm rate there is 2.6--4.5\%, within level.
 
 \begin{table}[h!]
 \centering
@@ -220,7 +220,7 @@ Three settings observe a reversible hidden chain through a noisy or lumping chan
 \label{fig:validity}
 \end{figure}
 
-\paragraph{Detection.} Table~\ref{tab:detection} and Figure~\ref{fig:detection} report detection times over 400 trajectories per irreversible chain. The comparison is a fixed-$n$ LRT with critical values calibrated by simulating 1{,}000 trajectories of the least favorable reversible chain $M$. Its sample size is the smallest $n$ with 80\% power against the true chain. This baseline is idealized: it is told the right sample size in advance, which no experimenter knows. We calibrate its cutoffs by simulation because the asymptotic $\chi^2$ cutoffs are unreliable at small $n$. With those cutoffs the baseline would look cheaper for seven of the eight chains, by up to 36\% for the chains far from equilibrium, where they are anti-conservative. For one chain (random $k=4$ \#1) they are conservative instead.
+\paragraph{Detection.} Table~\ref{tab:detection} and Figure~\ref{fig:detection} report detection times over 400 trajectories per irreversible chain. The comparison is a fixed-$n$ LRT with critical values calibrated by simulating 1{,}000 trajectories of the least favorable reversible chain $M$. Its sample size is the smallest $n$ with 80\% power against the true chain. This baseline is idealized: it is told the right sample size in advance, which no experimenter knows. We calibrate its cutoffs by simulation because the asymptotic $\chi^2$ cutoffs are unreliable at small $n$. With the asymptotic cutoffs the baseline would look cheaper for seven of the eight chains, by up to 36\% for the chains far from equilibrium, where the asymptotic cutoffs are anti-conservative. For one chain (random $k=4$ \#1) they are conservative instead.
 
 For the five chains with $\rho<0.07$ bits/step, the loop test's 80th-percentile detection time is 1.7--1.9 times the fixed-sample size, and its median roughly equals that size. Far from equilibrium the ratio rises to 2.5--4.2, because of the burn-in and the discarded within-loop information. These chains are detected within about a hundred steps. The likelihood e-process needs 3.5--8.7 times the fixed-sample size. No median falls below the floor $\log_2(20)/\rho$ of Theorem~\ref{thm:lower}. Medians and percentiles carry Monte Carlo error of about $\pm8\%$.
 
@@ -258,19 +258,19 @@ For the five chains with $\rho<0.07$ bits/step, the loop test's 80th-percentile 
 
 \paragraph{AI-assisted review and reproduction.} As a consistency check, and not as independent peer review, we used separate AI-agent sessions without access to our working context.
 \begin{itemize}[leftmargin=1.25em,itemsep=0.1em]
-\item \emph{Adversarial review of the proofs and code.} It found a gap in an earlier version, which averaged loop tests over reference states; that version was replaced. It also found that the baseline LRT was anti-conservative; the LRT is now calibrated by simulation.
+\item \emph{Adversarial review of the proofs and code.} It found a gap in an earlier version, which averaged loop tests over reference states; that version was replaced. It exhibited a step-level stopping rule with $\E[E_\tau]\approx1.18$ for the loop test (Section~\ref{sec:loop}), and it checked the reversible maximum-likelihood iteration against multi-start quasi-Newton optimization on 150 random count matrices (Section~\ref{sec:likelihood}). It also found that the baseline LRT was anti-conservative; the LRT is now calibrated by simulation.
 \item \emph{Reproduction.} A second session regenerated the growth, efficiency, and rate experiments with byte-identical output. It also reimplemented the loop test from the written specification alone. It obtained 3.8\% [2.5, 5.7] false alarms on a reversible four-state chain, and a median detection time of 394 steps against our 407 for the $q=0.2$ ring.
 \end{itemize}
 These checks reduce, but do not replace, the need for human review.
 
 \section{Discussion}
 
-\paragraph{Summary.} Deciding whether a system is at equilibrium, from data examined as they arrive, is governed by $\rho$, the divergence to the nearest reversible chain, rather than by the entropy production $\sigma$. The loop test makes this decision with a non-asymptotic false-alarm guarantee under continuous monitoring, with a one-paragraph proof. For $\rho<0.07$ bits/step, its cost is 1.7--1.9 times an idealized fixed-sample design.
+\paragraph{Summary.} Deciding whether a system is at equilibrium, from data examined as they arrive, is governed by $\rho$, the divergence to the nearest reversible chain, rather than by the entropy production $\sigma$. The loop test makes this decision with an anytime-valid false-alarm guarantee whose proof is elementary. For $\rho<0.07$ bits/step, its cost is 1.7--1.9 times an idealized fixed-sample design.
 
 \paragraph{Limitations.}
 \begin{itemize}[leftmargin=1.25em,itemsep=0.1em]
 \item The theory covers fully observed, finite-state, first-order Markov chains. For hidden-state records the tests stayed within level in our simulations, but the guarantees do not apply. Excursions of an observed state need not regenerate the hidden state.
-\item The tests certify that detailed balance is broken; they do not give a confidence bound on $\sigma$. Because $\sigma\ge2\rho$, a time-uniform lower confidence bound on $\rho$ would bound $\sigma$ from below. Inverting the loop test over tilted nulls is one route to it.
+\item The tests certify that detailed balance is broken; they do not give a confidence bound on $\sigma$. Because $\sigma\ge2\rho$, a time-uniform lower confidence bound on $\rho$ would bound $\sigma$ from below; constructing one is open.
 \item Far from equilibrium the loop test discards within-loop information: its efficiency falls to 0.57 at $\rho\approx0.14$ and 0.34 for the one-way ring. Combining it with the likelihood e-process would require a common filtration, which Theorem~\ref{thm:loop}'s loop-indexed martingale does not provide.
 \item Efficiency depends on the reference state. We report the most visited state, which the burn-in rule selects with high probability; we did not study other choices.
 \item The experiments use small state spaces ($k\le5$) and synthetic chains.
@@ -298,7 +298,7 @@ This is an in-sample plug-in estimate of the divergence of \cite{roldanparrondo2
 
 \paragraph{Why universality alone does not justify KL estimation.} Pointwise universality of a code controls code lengths only on paths typical for the law it is universal for. Distinct stationary ergodic laws are mutually singular, so a universal code for $P^\ast$ says nothing about the code length of a path drawn from $P$. Differences of separate compressions estimate the entropy-rate difference, which vanishes for time reversal. Estimating $\KL(P\|P^\ast)$ requires a model of $P^\ast$ that is accurate on contexts typical for $P$, and a finite-order plug-in supplies one for finite-state Markov chains.
 
-\paragraph{Hidden-state records.} If $Y$ observes a Markov chain $Z$ through a memoryless channel, then reversing the observation equals observing the reversal. By data processing, $\KL(P^Y_m\|P^{Y\ast}_m)\le(m-1)\sigma_Z$ for every $m$ \cite{gomezmarin2008}. The order-$R$ estimator targets the conditional increment $d_R=D_{R+1}-D_R$. Averages of these increments are bounded by $\sigma_Z$, but a single $d_R$ need not be.
+\paragraph{Hidden-state records.} If $Y$ observes a Markov chain $Z$ through a memoryless channel, then reversing the observation equals observing the reversal. By data processing, $D_m:=\KL(P^Y_m\|P^{Y\ast}_m)\le(m-1)\sigma_Z$ for every $m$ \cite{gomezmarin2008}. The order-$R$ estimator targets the conditional increment $d_R=D_{R+1}-D_R$. Averages of these increments are bounded by $\sigma_Z$, but a single $d_R$ need not be.
 
 \paragraph{Numerical validation.} Table~\ref{tab:markov} and Figure~\ref{fig:markov-conv} follow 15 random chains ($\sigma$ from 0.0067 to 1.92 bits/step). The median relative error falls from 10.3\% at $n=2^9$ to 1.3\% at $n=2^{15}$. On 60 further chains at $n=2^{15}$, the correlation with $\sigma$ is 0.9994 (Figure~\ref{fig:calibration}). On reversible chains the positive in-sample bias shrinks roughly as $1/n$: 0.0015 bits/step at $n=2^{11}$ and 0.00013 at $2^{15}$ for three states. A hidden three-state ring with $\sigma_Z=0.646$ seen through a noisy channel yields 0.085--0.127 bits/step. Merging two of its states makes the observed process exactly reversible, and the estimate falls to at most $7\times10^{-5}$ (Figure~\ref{fig:hmm}).
 
