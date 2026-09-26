@@ -23,7 +23,7 @@ def validity():
     v = pd.read_csv("anc/seq_validity.csv").assign(kind="Markov")
     m = pd.read_csv("anc/seq_misspec.csv").assign(kind="hidden")
     lines = [r"\begin{tabular}{llccccc}", r"\toprule",
-             r"Reversible process & Type & Loop test & Likelihood & LRT, fixed $n$ & LRT, 10 looks & LRT, all looks \\",
+             r"Reversible process & Type & Loop test & Likelihood & LRT, fixed $n$ & LRT, 10 looks & LRT, 221 checkpoints \\",
              r"\midrule"]
     for _, r in pd.concat([v, m]).iterrows():
         loop = f"{100 * r.loop_anytime:.1f}\\% [{100 * r.loop_lo:.1f}, {100 * r.loop_hi:.1f}]"
@@ -53,7 +53,7 @@ def efficiency():
              r"Chain & $\rho$ (bits/step) & Loop-test rate & Efficiency \\", r"\midrule"]
     for _, r in e.iterrows():
         lines.append(f"{tex(r.chain)} & {r.rho:.4f} & {r.loop_rate:.4f} $\\pm$ {r.loop_rate_se:.4f} & "
-                     f"{r.efficiency:.2f} $\\pm$ {r.efficiency_se:.2f} \\\\")
+                     f"{r.efficiency:.3f} $\\pm$ {r.efficiency_se:.3f} \\\\")
     lines += [r"\bottomrule", r"\end{tabular}", ""]
     Path("tables/seq_efficiency.tex").write_text("\n".join(lines))
 
