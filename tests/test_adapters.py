@@ -7,7 +7,7 @@ import pytest
 import tempfile
 import os
 
-from src.uec.adapters import (
+from uec.adapters import (
     load_image_gray, image_to_tokens_raster, image_patches,
     fit_codebook_kmeans, assign_codebook, image_to_tokens_patch_vq,
     load_video_frames, frames_to_tokens_vq, video_to_tokens_vq,

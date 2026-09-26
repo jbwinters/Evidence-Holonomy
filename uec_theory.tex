@@ -24,313 +24,384 @@
 \newtheorem{remark}[theorem]{Remark}
 
 \newcommand{\X}{\mathcal{X}}
-\newcommand{\Y}{\mathcal{Y}}
 \newcommand{\N}{\mathbb{N}}
 \newcommand{\E}{\mathbb{E}}
 \newcommand{\KL}{\mathrm{D}}
 \newcommand{\code}{\mathcal{E}}
 \newcommand{\push}{\#}
 \newcommand{\RR}{\mathbb{R}}
+\newcommand{\Hnull}{\mathcal{H}_0}
 
-\title{Evidence Holonomy and Entropy Production:\\
-From Universal Coding to Irreversibility}
+\title{Evidence Against Equilibrium:\\
+Optimal Rates and Anytime-Valid Tests of Detailed Balance}
 \author{Joshua Winters\\Independent Researcher\\\texttt{josh@friendmachine.co}}
-\date{August 27, 2025; revised September 25, 2026}
+\date{September 26, 2026\\\small (supersedes ``Evidence Holonomy and Entropy Production,'' August 27, 2025)}
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
-We define an ``evidence holonomy'' functional on loops of representation transforms applied to sample paths, in two versions. \textbf{Representation-space holonomy} scores each representation with its own universal code; by pointwise universality it converges to the entropy-rate difference $h(Q)-h(P)$, where $Q$ is the law of the loop's output. \textbf{KL holonomy} instead scores the original path under the loop's pushforward law; its rate is the relative-entropy rate $\mathsf{d}(P\|Q)$, and for the time-reversal loop of a stationary finite-state Markov chain it equals the entropy production rate $\sigma$ (bits/step). Estimating KL holonomy requires a model of $Q$ that is accurate on paths typical for $P$, which universality alone does not provide. We analyze the order-$R$ plug-in estimator implemented in our code. It is consistent for $\sigma$ on Markov chains for every $R\ge 1$. On records observed through a memoryless channel, averages of its order-wise limits are lower bounds on the hidden entropy production. Numerical checks on random chains, closed-form rings, reversible chains, and a hidden ring show convergence, a small positive finite-sample bias, and the gap between observed and hidden irreversibility.
+Whether a stationary system is at equilibrium or driven out of it can be read from a single trajectory: driven Markov dynamics break detailed balance and look different when played backward. In practice such data are examined as they arrive, and a classical likelihood-ratio test that is correct at a planned sample size stops being correct when checked repeatedly. In our simulations its false-alarm rate rose from 5\% to 24--60\%. We develop tests of detailed balance that remain valid when checked after every observation, and we characterize how fast any such test can succeed. Against the composite null hypothesis of reversibility, no test can accumulate evidence faster than $\rho=\sum_{ij}f_{ij}\log_2\frac{2f_{ij}}{f_{ij}+f_{ji}}$ bits per step, where $f_{ij}$ is the stationary edge flow. This is the divergence to the nearest reversible chain, not the entropy production $\sigma$: $\rho\le\sigma/2$, $\rho\approx\sigma/4$ near equilibrium, and $\rho$ is finite when $\sigma$ is infinite. The rate yields a lower bound of about $\log_2(1/\alpha)/\rho$ on expected detection time at level $\alpha$. A likelihood e-process based on universal inference attains $\rho$ asymptotically but is slow at practical $\alpha$. A second test, which bets on the orientation of loops through a reference state, is exactly valid under continuous monitoring. Near equilibrium it captures 92--100\% of the optimal rate and needs 1.7--1.9 times the sample size of an idealized fixed-sample test. Results were checked by an independent adversarial review and reproduced independently.
 \end{abstract}
 
-\section{Setup and Definitions}
+\section{Introduction}
 
-\paragraph{Alphabet and path space.} Fix a finite alphabet $\X$. Let $\X^n$ denote length-$n$ strings and $\X^{\N}$ the one-sided sequence space with its product $\sigma$-algebra. Let $P$ be a stationary ergodic probability measure on $\X^{\N}$. Write $X_{0:n-1}$ for the length-$n$ prefix of a sample from $P$ and $P_n$ for its law on $\X^n$.
+A stationary Markov chain with transition matrix $T$ and stationary law $\pi$ is \emph{reversible}, or satisfies detailed balance, if $\pi_iT_{ij}=\pi_jT_{ji}$ for all states $i,j$. Reversibility is the signature of thermodynamic equilibrium. Its violation, broken detailed balance, signals that the system is driven, for example by ATP hydrolysis in molecular motors or by external forcing in active matter. The entropy production rate $\sigma$ quantifies the violation, and a substantial literature estimates it from observed trajectories (Section~\ref{sec:related}).
 
-\paragraph{Universal codes.}
-A \emph{universal code} on alphabet $\mathcal{A}$ is a map $\code_{\mathcal{A}}:\bigcup_{n\ge 1}\mathcal{A}^n\to \RR_+$ assigning a code length in bits to any finite string, such that for every stationary ergodic law $Q$ on $\mathcal{A}^{\N}$,
-\begin{equation}\label{eq:universality}
-\frac{1}{n}\Big(\code_{\mathcal{A}}(Y_{0:n-1}) + \log_2 Q_n(Y_{0:n-1})\Big) \xrightarrow[n\to\infty]{} 0
-\quad\text{$Q$-a.s. and in } L^1(Q).
-\end{equation}
-Classical examples include LZ78, Krichevsky--Trofimov (KT) mixtures over Markov orders, and context-tree weighting \cite{ziv1978,kt1981,willems1995ctw,shields1996,csiszarshields2004}. Note that \eqref{eq:universality} is a statement about paths typical for $Q$ only.
+This paper concerns a prior question: \emph{deciding} whether detailed balance is broken, as data arrive. Experimenters rarely fix a recording length in advance and look once. They watch, and stop when the evidence looks convincing. That practice invalidates classical tests. In our simulations of reversible chains (Section~\ref{sec:experiments}), a likelihood-ratio test calibrated to 5\% at a fixed sample size raised false alarms 24--36\% of the time when checked 10 times and 44--60\% of the time when checked continuously.
 
-\paragraph{Standing assumptions.}
-Unless stated otherwise, alphabets are finite; processes are stationary and ergodic;
-and when relative-entropy rates are finite we assume $P_n\ll Q_n$ for all $n$.
-All logs are base 2, and all rates are per symbol.
+We make four contributions.
+\begin{enumerate}[leftmargin=1.5em,itemsep=0.2em]
+\item \textbf{The optimal detection rate} (Section~\ref{sec:rate}). Against the composite null ``some reversible chain,'' the expected log-evidence of any valid test grows at most at rate $\rho$, the Kullback--Leibler rate from $T$ to its nearest reversible chain $(T+T^\ast)/2$. We show $\rho\le\sigma/2$, $\rho\approx\sigma/4$ near equilibrium, and $\rho<\infty$ even when $\sigma=\infty$. A Wald-type argument gives $\E[\tau]\gtrsim\log_2(1/\alpha)/\rho$ for every level-$\alpha$ sequential test.
+\item \textbf{A rate-optimal e-process} (Section~\ref{sec:likelihood}). A running maximum-likelihood construction \cite{wasserman2020} gives an e-process whose evidence grows at exactly rate $\rho$. It pays a model-selection overhead of order $(k(k-1)/2)\log t$ bits, which dominates at practical significance levels.
+\item \textbf{The loop test} (Section~\ref{sec:loop}). Under detailed balance, each loop through a reference state is as likely as its reversal, so its orientation is a fair coin. Betting on orientations gives a test that is exactly valid under continuous monitoring, needs no constrained optimization, and pays little overhead. Near equilibrium, where detection is hard, it captures 92--100\% of the optimal rate.
+\item \textbf{Experiments} (Section~\ref{sec:experiments}) confirm validity under monitoring after every step, the predicted growth rates, and detection times within 1.7--1.9 times an idealized fixed-sample test near equilibrium.
+\end{enumerate}
 
-\paragraph{Representation transforms and loops.}
-For each $n$, let $F_{i,n}:\X_{i-1}^{\,n_{i-1}(n)}\to\X_i^{\,n_i(n)}$ be measurable, where the alphabets
-$\X_i$ may differ by step and $n_0(n)=n$. A finite list $\gamma=(F_{1,n},\ldots,F_{m,n})$ is a \emph{loop at scale $n$}
-if $\X_m=\X_0=\X$ and $n_m(n)=n+O(1)$. Write $x^{(i)} = F_{i,n}\circ\cdots\circ F_{1,n}(x)$ and $L_n=F_{m,n}\circ\cdots\circ F_{1,n}$.
-When $n_m(n)\neq n$, the two arguments being compared are aligned by dropping $O(1)$ boundary symbols,
-which does not affect per-symbol limits.
+The paper supersedes an earlier version organized around ``evidence holonomy,'' a framing of irreversibility as the change in description length around a loop of representation transforms. That framing and the entropy-production estimator it motivated are retained in the appendices. The present results can be read as its sharpest form: evidence accumulated around the loops of the chain itself.
 
-\paragraph{Why ``holonomy''?}
-In differential geometry, holonomy measures the failure of a vector to return unchanged after
-parallel transport around a closed loop. Here the ``vector'' is the description length (or log-likelihood)
-an observer assigns to a path, and the holonomy is its net change after the path is carried around a loop
-of representations. Bijective relabelings are ``flat'' (zero holonomy); time reversal of a nonequilibrium
-process is not. The analogy is motivational: we use it to organize two different ways of comparing evidence
-before and after a loop, not to claim a connection or curvature in the geometric sense.
+\section{Related work}\label{sec:related}
 
-\subsection{Two holonomy functionals}
+\paragraph{Entropy production and time reversal.} For stationary Markov processes, the relative-entropy rate between forward and time-reversed path measures equals the entropy production rate \cite{schnakenberg1976,gaspard2004,seifert2012}. Roldán and Parrondo estimated this divergence from single trajectories with plug-in and compression-based estimators, the latter via Ziv--Merhav cross-parsing \cite{roldanparrondo2010,roldanparrondo2012,zivmerhav1993}. Chazottes and Redig \cite{chazottesredig2005} and Cristadoro et al.\ \cite{cristadoro2023} built universal estimators from hitting and waiting times. Coarse-grained or partial observation yields lower bounds on dissipation \cite{gomezmarin2008}, and waiting-time statistics can reveal irreversibility that transition counts miss \cite{martinez2019}. Compression \cite{martiniani2019,ro2022} and neural networks \cite{kim2020} have also been used to estimate entropy production. Cycle counts and affinities in Markov models are analyzed in \cite{pietzonka2021}.
 
-\begin{definition}[Representation-space holonomy]\label{def:holonomy-out}
-Given universal codes $\code_{\X_i}$ for the intermediate alphabets,
+\paragraph{Deciding the arrow of time.} Roldán et al.\ \cite{roldan2015} apply Wald's sequential probability ratio test to decide the direction of time's arrow. Their test compares a process with its own time reversal, a \emph{simple} null, and evidence accrues at rate $\sigma$. We test the \emph{composite} null ``some reversible chain,'' which asks whether the system is at equilibrium at all, without specifying which equilibrium. Section~\ref{sec:rate} shows the relevant rate is then $\rho\le\sigma/2$.
+
+\paragraph{Testing reversibility.} Fixed-sample tests of reversibility for Markov chain data include chi-squared tests on transition counts \cite{steuber2012} and algebraic checks \cite{jiang2018}. Property testing studies identity testing of reversible chains \cite{friedwolfer2022}. The reversible chains form both an exponential and a mixture family; the m-projection of a kernel onto them is the additive reversiblization $(T+T^\ast)/2$ \cite{wolfer2021,fill1991}, identified as the closest equilibrium dynamics in \cite{andrieux2025}. Our Lemma~\ref{lem:projection} restates this result.
+
+\paragraph{Anytime-valid inference.} E-values and e-processes give tests that stay valid under optional stopping and continuation \cite{grunwald2024,ramdas2023}. Universal inference constructs them for composite nulls from a predictable likelihood divided by the null maximum likelihood \cite{wasserman2020}. To our knowledge, neither the rate $\rho$ as the optimal evidence rate against reversibility nor anytime-valid tests of detailed balance have appeared before. Our literature search was, however, limited.
+
+\section{Setup}\label{sec:setup}
+
+Let $x_0,x_1,\dots$ be a Markov chain on $\X=\{1,\dots,k\}$ with transition matrix $T$. When $T$ is irreducible, $\pi$ denotes its stationary law, $f_{ij}=\pi_iT_{ij}$ the stationary edge flow, and $T^\ast_{ij}=\pi_jT_{ji}/\pi_i$ the time reversal. The entropy production rate is
 \[
-\mathrm{Hol}_{n}^{\mathrm{out},\gamma}(x)
-  = \sum_{i=1}^m \Big(\code_{\X_i}\big(x^{(i)}\big)-\code_{\X_{i-1}}\big(x^{(i-1)}\big)\Big)
-  = \code_{\X}\big(L_n(x)\big)-\code_{\X}(x).
+\sigma=\sum_{i,j}f_{ij}\log_2\frac{f_{ij}}{f_{ji}}\quad\text{(bits/step)},
 \]
-\end{definition}
-
-\begin{definition}[KL holonomy]\label{def:holonomy-kl}
-Let $Q_n=(L_n)\push P_n$ be the law of the loop's output. The (ideal) KL holonomy is
+equal to $+\infty$ if some transition is possible in only one direction \cite{gaspard2004}. The null hypothesis is
 \[
-\mathrm{Hol}^{\mathrm{KL},\gamma}_n(x) \;=\; \log_2 \frac{P_n(x)}{Q_n(x)},
+\Hnull:\ \text{$T$ is reversible (detailed balance holds), with any initial state.}
 \]
-the code length of $x$ under $Q_n$ minus its code length under $P_n$. Its expectation is
-$\E_P[\mathrm{Hol}^{\mathrm{KL},\gamma}_n] = \KL(P_n\|Q_n)$.
-\end{definition}
+A \emph{level-$\alpha$ anytime-valid test} is a process $(E_t)$, adapted to the data, such that $P(\exists t:E_t\ge1/\alpha)\le\alpha$ for every law in $\Hnull$. It may be checked after every observation. An \emph{e-process} satisfies the stronger condition $\E[E_\tau]\le1$ for every stopping time $\tau$ and every null law. Every nonnegative martingale with initial value 1 is an e-process, and Ville's inequality makes it a level-$\alpha$ test. Logarithms are base 2 unless stated.
 
-Definition~\ref{def:holonomy-kl} involves the unknown laws $P_n$ and $Q_n$; Section~\ref{sec:estimation} discusses how to estimate it from data.
+\section{The optimal rate}\label{sec:rate}
 
-\section{Reductions}
-
-\begin{lemma}[Representation-space holonomy]\label{lem:out}
-Suppose the loop's outputs are the $n$-marginals of a stationary ergodic process $Q$ (see Section~\ref{sec:stationary}), and $\code_\X$ is universal. Then
-\begin{equation}\label{eq:hol-out-reduction}
-\frac{1}{n}\Big(\mathrm{Hol}_{n}^{\mathrm{out},\gamma}(X_{0:n-1}) - \log_2\frac{P_n(X_{0:n-1})}{Q_n(L_n(X_{0:n-1}))}\Big) \xrightarrow[n\to\infty]{} 0 \quad\text{in } L^1(P).
-\end{equation}
-If, in addition, the outputs $L_n(X_{0:n-1})$ are prefixes of a single $Q$-distributed sequence (as for sliding-block codes), the convergence also holds $P$-a.s.
+\begin{lemma}[Nearest reversible chain \cite{wolfer2021}]\label{lem:projection}
+Let $T$ be irreducible. Among reversible transition matrices $Q$, the rate $D_\pi(T\|Q)=\sum_{ij}f_{ij}\log_2(T_{ij}/Q_{ij})$ is minimized by the additive reversiblization $M=(T+T^\ast)/2$, and
+\[
+\min_{Q\ \text{reversible}}D_\pi(T\|Q)=\rho:=\sum_{i,j}f_{ij}\log_2\frac{2f_{ij}}{f_{ij}+f_{ji}}.
+\]
 \end{lemma}
 \begin{proof}
-Since $L_n(X_{0:n-1})\sim Q_n$, the $L^1(Q)$ part of \eqref{eq:universality} applied to $Q$ controls $\code_\X(L_n(X))+\log_2 Q_n(L_n(X))$, and applied to $P$ controls $\code_\X(X)+\log_2 P_n(X)$; subtract \cite{barron1985,shields1996}. $L^1$ convergence depends only on the marginal laws. Almost-sure convergence needs the outputs for different $n$ to lie on one sample path. This fails for time reversal, where $L_n(x)$ is a different string for every $n$.
+Let $g$ be the symmetric edge measure of a reversible $Q$, with marginal $\mu$. Then $D_\pi(T\|Q)=\KL(f\|g)-\KL(\pi\|\mu)$. Let $s=(f+f^\top)/2$, which is symmetric with marginal $\pi$ by stationarity. Since $\log(s/g)$ is symmetric, $\sum f\log(s/g)=\sum s\log(s/g)$, hence $\KL(f\|g)=\KL(f\|s)+\KL(s\|g)$. By data processing, $\KL(s\|g)\ge\KL(\pi\|\mu)$. So $D_\pi(T\|Q)\ge\KL(f\|s)=\rho$, with equality when $g=s$, that is, $Q=M$.
 \end{proof}
 
-\begin{theorem}[Expectation-level identities]\label{thm:exp_reductions}
-Under the assumptions of Lemma~\ref{lem:out},
-\begin{equation}\label{eq:exp-out}
-\frac{1}{n}\,\E_P\big[\mathrm{Hol}_{n}^{\mathrm{out},\gamma}\big] = h(Q)-h(P)+o(1).
-\end{equation}
-For KL holonomy, whenever the limit exists,
-\begin{equation}\label{eq:exp-kl}
-\frac{1}{n}\,\E_P\big[\mathrm{Hol}_{n}^{\mathrm{KL},\gamma}\big]
-= \frac{1}{n}\,\KL(P_n\|Q_n)\;\xrightarrow[n\to\infty]{}\; \mathsf{d}(P\|Q)\;\ge 0.
-\end{equation}
-\end{theorem}
+\begin{proposition}[Properties of $\rho$]\label{prop:rho}
+\begin{enumerate}[label=(\alph*),itemsep=0.1em]
+\item $0\le\rho\le\sigma/2$, and $\rho=0$ if and only if $T$ is reversible.
+\item $\rho\le\sum_{i\ne j}f_{ij}$ bits. In particular, $\rho<\infty$ even when $\sigma=\infty$.
+\item If $f_{ij}=s_{ij}+a_{ij}$ and $f_{ji}=s_{ij}-a_{ij}$ with $|a_{ij}|\ll s_{ij}$, then $\rho=\sigma/4+O(\max|a|^3/s^2)$.
+\end{enumerate}
+\end{proposition}
 \begin{proof}
-Take expectations in \eqref{eq:hol-out-reduction}, using $\E_P[-\log_2 P_n(X)]=H(P_n)$ and $\E_P[-\log_2 Q_n(L_n(X))]=H(Q_n)$, and divide by $n$. The second identity is Definition~\ref{def:holonomy-kl}.
+(a) By convexity of $\KL$ in its second argument, $\KL(f\|\tfrac12f+\tfrac12f^\top)\le\tfrac12\KL(f\|f)+\tfrac12\KL(f\|f^\top)=\sigma/2$. (b) Each term satisfies $\log_2(2f_{ij}/(f_{ij}+f_{ji}))\le1$, and diagonal terms vanish. (c) For each unordered pair, $\rho$ contributes $(s+a)\log\frac{s+a}{s}+(s-a)\log\frac{s-a}{s}=a^2/s+O(a^4/s^3)$ nats, while $\sigma$ contributes $2a\log\frac{s+a}{s-a}=4a^2/s+O(a^4/s^3)$ nats.
 \end{proof}
 
-\begin{remark}[Scope]
-Equation~\eqref{eq:exp-out} measures net compression or expansion under the loop and does not depend on which universal code is used. Equation~\eqref{eq:exp-kl} is the \emph{irreversibility} functional: it compares two laws on the same coordinates and is non-negative.
-\end{remark}
-
-\section{Canonical Loops}
-
-\subsection{Gauge invariance for bijective loops}
-
-\begin{corollary}[Gauge invariance]\label{cor:gauge}
-If the loop is the identity map on $\X^n$ (for example, a relabeling followed by its inverse), then $Q_n=P_n$, so $\mathrm{Hol}_{n}^{\mathrm{KL},\gamma}\equiv 0$ and $\frac{1}{n}\mathrm{Hol}_{n}^{\mathrm{out},\gamma}(X_{0:n-1}) = 0$.
-\end{corollary}
-
-\subsection{Coarse-graining and observation channels}\label{sec:stationary}
-
-A deterministic coarse-graining followed by a lift, $L_n=R_n\circ K_n$, produces outputs supported on the image of $R_n$. Unless $P_n$ is supported there too, $P_n\not\ll Q_n$ and the KL rate is infinite. So deterministic coarse-grain--lift loops do not give informative KL holonomies. (Estimators with smoothed probabilities return finite numbers that grow as the smoothing vanishes.)
-
-The useful statement about coarse-graining concerns applying the \emph{same} channel to both laws. Let $C$ be a memoryless channel (a stochastic matrix applied independently to each symbol), and write $CP$ for the law of the channel output when the input has law $P$. By the data-processing inequality \cite{coverthomas},
-\begin{equation}\label{eq:dpi}
-\KL\big((CP)_n\,\|\,(CQ)_n\big) \le \KL(P_n\|Q_n)\quad\text{for every } n.
-\end{equation}
-
-\paragraph{When is the pushforward stationary?}
-For a general sequence of maps $L_n$, the laws $Q_n$ need not be the $n$-marginals of any stationary process.
-A sufficient condition is that the loop acts as a shift-commuting sliding-block code $(L_n(x))_t = F(x_{t-m:t+m})$.
-Time reversal is not a sliding-block code, but the reversed process of a stationary process is stationary, so it is covered directly.
-
-\subsection{Time reversal and entropy production for Markov chains}
-
-Let $P$ be a stationary Markov chain on $\X=\{1,\dots,k\}$ with transition matrix $T$ and stationary law $\pi$. Its time reversal $P^{\mathrm{rev}}$ is the Markov chain with transitions $T^\ast_{ij}=\pi_j T_{ji}/\pi_i$; equivalently, $P^{\mathrm{rev}}_n(x_0,\dots,x_{n-1})=P_n(x_{n-1},\dots,x_0)$.
-
-\paragraph{Time-reversal loop.}
-The loop is literal reversal, $L_n(x_{0:n-1})=(x_{n-1},\dots,x_0)$, so $(L_n)\push P_n=P^{\mathrm{rev}}_n$. It can also be written as a loop through the transition alphabet $\X^2$. Encode $x$ as its edge sequence $e_t=(x_{t-1},x_t)$, $t=1,\dots,n-1$; reverse the edge sequence; then keep the \emph{second} state of each edge. This yields $(x_{n-1},x_{n-2},\dots,x_1)$, the reversal of $x_{1:n-1}$, which differs from literal reversal by one boundary symbol. Our implementation uses this form and compares it against $x_{1:n-1}$. The edge presentation adds no information beyond literal reversal.
-
-\begin{theorem}[KL holonomy of time reversal equals entropy production]\label{thm:EP}
-Suppose $T_{ij}>0 \Leftrightarrow T_{ji}>0$ for all $i,j$. Then
-\begin{equation}\label{eq:EP_rate}
-\KL(P_n\|P^{\mathrm{rev}}_n) = (n-1)\,\sigma,\qquad
-\sigma = \sum_{i,j}\pi_i T_{ij}\,\log_2\frac{\pi_i T_{ij}}{\pi_j T_{ji}}\quad(\text{bits/step}),
-\end{equation}
-so $\mathsf{d}(P\|P^{\mathrm{rev}})=\sigma$ and $\frac{1}{n}\E_P[\mathrm{Hol}_{n}^{\mathrm{KL},\mathrm{rev}}]\to\sigma$.
-\end{theorem}
-\begin{proof}
-For a path $x=x_{0:n-1}$ with positive probability,
+\begin{theorem}[No test can do better]\label{thm:lower}
+Let $T$ be irreducible and irreversible, and let the chain start from $\pi$. Let $P$ denote its law.
+\begin{enumerate}[label=(\alph*),itemsep=0.1em]
+\item For every e-process $(E_t)$ valid under $\Hnull$, $\E_P[\log_2E_t]\le t\rho$ for all $t$.
+\item Every sequential test with type-I error at most $\alpha$ under $\Hnull$, power at least $1-\beta$ against $P$, and $\E_P[\tau]<\infty$ satisfies
 \[
-\log_2\frac{P_n(x)}{P^{\mathrm{rev}}_n(x)}=\log_2\frac{P_n(x_{0:n-1})}{P_n(x_{n-1},\dots,x_0)}
-= \log_2\frac{\pi_{x_0}}{\pi_{x_{n-1}}} + \sum_{t=1}^{n-1}\log_2\frac{T_{x_{t-1}x_t}}{T_{x_t x_{t-1}}}.
+\E_P[\tau]\ \ge\ \frac{d(1-\beta\,\|\,\alpha)-c_T}{\rho},
 \]
-Under stationarity, the boundary term has expectation zero and each summand has expectation $\sum_{i,j}\pi_iT_{ij}\log_2(T_{ij}/T_{ji})$. This equals $\sigma$ because $\sum_{i,j}\pi_iT_{ij}\log_2(\pi_i/\pi_j)=\sum_i\pi_i\log_2\pi_i-\sum_j\pi_j\log_2\pi_j=0$. This is the standard identification of entropy production with the relative entropy between forward and reversed path measures \cite{schnakenberg1976,crooks1999,kawai2007,seifert2012}.
+where $d(p\|q)$ is the binary KL divergence in bits and $c_T$ depends only on $T$. As $\alpha,\beta\to0$, the bound is $(1+o(1))\log_2(1/\alpha)/\rho$.
+\end{enumerate}
+\end{theorem}
+\begin{proof}
+The chain with transition matrix $M=(T+T^\ast)/2$ started from $\pi$ is reversible and stationary, so its law $P^M$ belongs to $\Hnull$. Moreover, $M$ has stationary law $\pi$ and the support of $T$, so $\KL(P_t\|P^M_t)=t\rho$ exactly.
+\begin{enumerate}[label=(\alph*),itemsep=0.1em]
+\item By Gibbs' inequality, $\E_P[\log E_t]\le\KL(P_t\|P^M_t)+\log\E_{P^M}[E_t]\le t\rho$.
+\item By data processing on the stopped path, $\KL(P_\tau\|P^M_\tau)\ge d(1-\beta\|\alpha)$. The log-likelihood ratio $\sum_{s\le\tau}\log_2\frac{T(x_{s-1},x_s)}{M(x_{s-1},x_s)}$ is a Markov additive functional with stationary mean $\rho$ per step. By Wald's identity with the Poisson-equation correction, whose bounded remainder defines $c_T$, $\KL(P_\tau\|P^M_\tau)\le\rho\,\E_P[\tau]+c_T$.\qedhere
+\end{enumerate}
 \end{proof}
 
-\begin{remark}[Absolute continuity]
-If $T_{ij}>0$ but $T_{ji}=0$ for some pair, then $P_n\not\ll P^{\mathrm{rev}}_n$ and the rate is $+\infty$.
+\begin{remark}[Why $\rho$ and not $\sigma$]
+The simple-null test of \cite{roldan2015} compares $P$ with its time reversal $P^\ast$ and accrues evidence at rate $\KL(P\|P^\ast)=\sigma$. Here the least favorable member of the null is $M$, not $P^\ast$, and $\KL(P\|M)=\rho\le\sigma/2$. Deciding whether a system is at equilibrium, without knowing which equilibrium, is intrinsically slower than deciding which way time runs.
 \end{remark}
 
-\begin{remark}[Why not $h(Q)-h(P)$?]
-Reversal preserves entropy rates, $h(P)=h(P^{\mathrm{rev}})$, so representation-space holonomy vanishes for the time-reversal loop. Only the KL version detects irreversibility.
-\end{remark}
+\section{A rate-optimal likelihood e-process}\label{sec:likelihood}
 
-\paragraph{General stationary processes.} For any stationary $P$ with $P_n\ll P^{\mathrm{rev}}_n$, the same definitions give $\frac{1}{n}\E_P[\mathrm{Hol}_{n}^{\mathrm{KL},\mathrm{rev}}]\to\mathsf{d}(P\|P^{\mathrm{rev}})$ whenever this limit exists.
+Let $C_{ij}(t)$ count the transitions $i\to j$ among the first $t$, and let $q_{s-1}(j\mid i)=(C_{ij}(s-1)+\frac12)/(\sum_jC_{ij}(s-1)+\frac k2)$ be the Krichevsky--Trofimov (KT) predictor \cite{kt1981}. Define
+\[
+E_t=\frac{\prod_{s=1}^tq_{s-1}(x_s\mid x_{s-1})}{\sup_{Q\ \text{reversible}}\prod_{s=1}^tQ(x_{s-1},x_s)}.
+\]
+The denominator is the reversible maximum likelihood. We compute it with the standard self-consistent iteration $X_{ij}\leftarrow(C_{ij}+C_{ji})/(N_i/x_i+N_j/x_j)$, with $Q_{ij}=X_{ij}/x_i$ \cite{trendelkamp2015}.
 
-\section{Estimation}\label{sec:estimation}
+\begin{proposition}[Validity]\label{prop:ui}
+Under $\Hnull$, $(E_t)$ is an e-process. In particular, $P(\exists t:E_t\ge1/\alpha)\le\alpha$ for any initial state.
+\end{proposition}
+\begin{proof}
+If $T_0$ is the true reversible matrix, the denominator is at least $\prod_sT_0(x_{s-1},x_s)$. So $E_t\le\prod_sq_{s-1}(x_s|x_{s-1})/T_0(x_{s-1},x_s)$, which is a nonnegative martingale with initial value 1 \cite{wasserman2020}.
+\end{proof}
 
-\paragraph{Universality is not enough.} A natural idea is to estimate $\log_2 Q_n(x)$ with a universal code trained on samples from $Q$. But \eqref{eq:universality} controls code lengths only on paths typical for $Q$. When $P\neq Q$ are both stationary ergodic, they are mutually singular, and a $P$-typical path is $Q$-atypical. So universality says nothing about the code length a $Q$-trained coder assigns to $X\sim P$. Code-length \emph{differences} from separate compressors (for example, LZ78 on $x$ and on $L_n(x)$) estimate $h(Q)-h(P)$, which is zero for reversal. Estimating $\mathsf{d}(P\|Q)$ requires conditional probabilities of $Q$ that are accurate on contexts that occur under $P$.
-
-\paragraph{The plug-in estimator.} Given $x_{0:n-1}$, let $y=x_{1:n-1}$ and $\tilde y=(x_{n-1},\dots,x_1)$ its reversal. For $r=0,\dots,R$, let $\hat p_r(a\mid c)$ be the KT estimate $(N_y(c,a)+\tfrac12)/(N_y(c)+\tfrac k2)$ from the counts of context $c\in\X^r$ followed by $a$ in $y$, and $\hat q_r$ the same from $\tilde y$. Mix orders with the Bayesian posterior weights obtained by sequentially coding $y$ (respectively $\tilde y$), then freeze the resulting predictors $\hat p$ and $\hat q$. The estimate is
-\begin{equation}\label{eq:estimator}
-\hat\sigma_{n,R} = \frac{1}{n-1}\sum_{t}\log_2\frac{\hat p(y_t\mid y_{t-R:t-1})}{\hat q(y_t\mid y_{t-R:t-1})},
-\end{equation}
-where the first few symbols use shorter contexts. Both predictors are evaluated on the same $y$ used to fit $\hat p$ (an in-sample plug-in estimate, cf.\ \cite{roldanparrondo2010}).
-
-\begin{proposition}[Consistency for Markov chains]\label{prop:consistency}
-Let $P$ be a stationary irreducible Markov chain with $T_{ij}>0\Leftrightarrow T_{ji}>0$, and let $R\ge 1$. Then $\hat\sigma_{n,R}\to\sigma$ almost surely.
+\begin{proposition}[Growth]\label{prop:growth}
+If $T$ is irreducible, $\frac1t\log_2E_t\to\rho$ almost surely.
 \end{proposition}
 \begin{proof}[Proof sketch]
-By the ergodic theorem, the empirical frequencies of $(r{+}1)$-blocks in $y$ converge a.s.\ to those of $P$. Those in $\tilde y$ are the same blocks reversed, so they converge to those of $P^{\mathrm{rev}}$. Both $P$ and $P^{\mathrm{rev}}$ are first-order Markov. So for every $r\ge1$ and every context of positive probability, $\hat p_r(\cdot\mid c)\to T_{c_{r},\cdot}$ and $\hat q_r(\cdot\mid c)\to T^\ast_{c_{r},\cdot}$, and the KT smoothing vanishes. If $T$ is not rank one, the order-0 component's log-likelihood deficit grows linearly in $n$, so its posterior weight tends to zero. If $T$ is rank one, the chain is i.i.d., $\sigma=0$, and every component converges to $\pi$. Hence $\hat p\to T$ and $\hat q\to T^\ast$ uniformly over the finitely many contexts visited. By the support condition, $T^\ast_{ij}>0$ whenever $T_{ij}>0$, so the log-ratios stay bounded. The ergodic theorem applied to \eqref{eq:estimator} gives the limit $\sum_{i,j}\pi_iT_{ij}\log_2(T_{ij}/T^\ast_{ij})=\sigma$.
+The KT numerator is within $\frac{k(k-1)}2\log_2t+O(k)$ bits of the unconstrained maximum likelihood. The empirical edge frequencies converge to $f$. The unconstrained and reversible maximized log-likelihoods, divided by $t$, converge to $\sum f\log T$ and $\max_{Q\ \text{rev}}\sum f\log Q$; the second step uses continuity of the reversible maximum in the frequencies. Their difference is $\rho$ by Lemma~\ref{lem:projection}.
 \end{proof}
 
-\begin{remark}[Robustness to $R$, not coder independence]
-Every order $r\ge1$ is consistent for a first-order chain, and the posterior concentrates on the smallest adequate order. So estimates for different $R\ge1$ nearly coincide at moderate $n$; Section~\ref{sec:numerics} reports agreement to within $10^{-13}$ bits/step. This reflects a shared, correctly specified model class. It is not evidence that arbitrary universal codes yield the same KL estimate.
-\end{remark}
+By Theorem~\ref{thm:lower}(a), $(E_t)$ is growth-rate optimal. At finite $t$, however, its log-evidence is roughly $\rho t-\frac{k(k-1)}2\log_2t$. The numerator pays for predicting every transition probability, while the denominator fits the symmetric part for free. At $\alpha=0.05$ this overhead dominates. The heuristic detection time, the solution of $\rho\tau=\log_2(1/\alpha)+\frac{k(k-1)}2\log_2\tau$, overpredicts the observed medians by a factor of 1.2--1.9, but it identifies the source of the cost.
 
-\begin{proposition}[Observed records bound hidden entropy production]\label{prop:hidden}
-Let $Z$ be a stationary Markov chain satisfying the conditions of Theorem~\ref{thm:EP}, with entropy production $\sigma_Z$, and let $Y=CZ$ be observed through a memoryless channel $C$. Write $D_m=\KL(P^Y_m\|P^{Y,\mathrm{rev}}_m)$. Then $D_m\le(m-1)\sigma_Z$ for every $m$, so $\mathsf{d}(P^Y\|P^{Y,\mathrm{rev}})\le\sigma_Z$ whenever the rate exists.
-\end{proposition}
-\begin{proof}
-Because the channel acts independently on each symbol, reversing the observed path is the same as observing the reversed hidden path: $P^{Y,\mathrm{rev}}_m=(C P^{Z,\mathrm{rev}})_m$. Apply \eqref{eq:dpi} and Theorem~\ref{thm:EP}.
-\end{proof}
+\emph{Numerical note.} The iteration is stopped by a relative-change rule, not a certified optimality gap. In an independent check against multi-start quasi-Newton optimization on 150 random count matrices, it fell short of the maximum by at most $1.5\times10^{-4}$ nats, which inflates $E_t$ by a factor of at most about $1.00015$.
 
-For an observed process $Y$, Proposition~\ref{prop:consistency}'s argument shows that the order-$R$ estimator converges (under ergodicity and positivity) to the conditional quantity $d_R = D_{R+1}-D_R$. Because $D_1=0$ (reversal preserves one-symbol marginals), the averages satisfy
+\section{The loop test}\label{sec:loop}
+
+\paragraph{Construction.} Count time in transitions. Let $B=10k$ and let $r$ be the most frequent state among $x_0,\dots,x_B$, with ties going to the lowest index. From the first time $t\ge B$ with $x_t=r$, cut the path into \emph{loops} $e=(r,y_1,\dots,y_{m-1},r)$ that leave $r$ and return to it. Let $\bar e$ denote the reversed loop. When a loop that started at time $t_0$ closes, multiply $E$ (initially 1) by
 \[
-\frac{1}{m-1}\sum_{R=1}^{m-1} d_R \;=\; \frac{D_m}{m-1}\;\le\;\sigma_Z .
+\frac{2\,q(e)}{q(e)+q(\bar e)},\qquad q(e)=\prod_{s}q(y_{s+1}\mid y_s),\quad q(\bar e)=\prod_sq(y_s\mid y_{s+1}),
 \]
-Individual terms $d_R$ need not be monotone in $R$ or below $\sigma_Z$. So a single finite-order estimate is not a certified bound, and the in-sample bias below pushes it upward.
+where $q$ is the KT estimate from all transitions $1,\dots,t_0$, frozen at the loop's start. Palindromic loops give a factor of exactly 1. Reject reversibility the first time $E\ge1/\alpha$.
 
-\begin{remark}[Finite-sample behavior]
-Evaluating $\hat p$ in-sample favors the forward model, so $\hat\sigma_{n,R}$ has a positive bias. A heuristic $\chi^2$ argument suggests it is of order $k^{R'+1}/n$, with $R'$ the order the mixture selects; for reversible chains ($\sigma=0$), Section~\ref{sec:numerics} shows it shrinking roughly in proportion to $1/n$. Fluctuations are of order $n^{-1/2}$. The code provides a block bootstrap for intervals.
+\begin{theorem}[Validity of the loop test]\label{thm:loop}
+Under $\Hnull$, $P(\exists t:E_t\ge1/\alpha)\le\alpha$.
+\end{theorem}
+\begin{proof}
+By the strong Markov property, each loop is independent of the past at its start, including the choice of $r$ (which uses only $x_0,\dots,x_B$) and the frozen estimate. Under detailed balance, $P(e)=\prod T=\prod T^{\top}$ along any closed walk (Kolmogorov's criterion), so $P(e)=P(\bar e)$. Given the unordered pair $\{e,\bar e\}$ and the past, the observed orientation is therefore a fair coin, and each factor has conditional mean $\frac{q(e)}{q(e)+q(\bar e)}+\frac{q(\bar e)}{q(e)+q(\bar e)}=1$. Indexed by completed loops, $E$ is a nonnegative martingale with initial value 1. It is constant between completions, so its supremum over all steps equals its supremum over completions. Ville's inequality gives the claim.
+\end{proof}
+
+\begin{remark}[What is not claimed]
+$(E_t)$ is not an e-process with respect to step-level stopping times. A stopping rule that inspects a partially completed loop can make $\E[E_\tau]$ exceed 1; the review exhibited $\E[E_\tau]\approx1.18$. The guarantee is Theorem~\ref{thm:loop}: a level-$\alpha$ test that may be checked after every step. For the same reason, averaging the processes for different reference states is not covered, because they evolve on different clocks.
 \end{remark}
 
-\section{Numerical validation}\label{sec:numerics}
+\paragraph{Efficiency.} With oracle knowledge of $T$, the evidence per loop is $\E[\log_2(2P(e)/(P(e)+P(\bar e)))]$. Divided by the mean loop length, this is at most $\rho$ by Theorem~\ref{thm:lower}(a). Near equilibrium almost all the evidence is carried by loop orientations, and the test is nearly optimal. Far from equilibrium it discards within-loop information, but such chains are detected within about a hundred steps (Table~\ref{tab:efficiency}).
 
-All numbers below come from the ancillary files in \texttt{anc/}. \texttt{scripts/paper\_experiments.py} regenerates them with fixed seeds; the estimator uses $R=3$ unless stated otherwise.
+\begin{table}[h!]
+\centering
+\caption{Oracle evidence rate of the loop test with the reference state it selects, relative to the optimal rate $\rho$ (bits/step). Simulation of up to $6\times10^5$ loops per chain; $\pm$ one standard error.}
+\label{tab:efficiency}
+\input{tables/seq_efficiency}
+\end{table}
 
-\paragraph{Random chains.} Table~\ref{tab:markov} and Figure~\ref{fig:markov-conv} follow 15 random biased chains (five each with 3, 4, and 5 states; $\sigma$ between 0.0067 and 1.92 bits/step) as the sample length grows from $2^9$ to $2^{15}$. The median relative error falls from 10.3\% at $n=2^9$ to 1.3\% at $n=2^{15}$. Chains with small $\sigma$ converge slowest in relative terms; the largest error at $n=2^{15}$ is 19\%.
+\paragraph{Why loops.} Kolmogorov's criterion states that a chain is reversible exactly when every cycle has equal forward and backward probability, that is, zero cycle affinity \cite{pietzonka2021}. The loop test turns this criterion into a betting game on the cycles the trajectory actually traverses. Evidence accumulates only where time-reversal symmetry could be broken, which is the property Section~\ref{sec:likelihood}'s likelihood e-process lacks. Chains whose transition graph is a tree are always reversible, and on such graphs every factor is exactly 1.
+
+\section{Experiments}\label{sec:experiments}
+
+All experiments are seeded; \texttt{scripts/sequential\_experiments.py} regenerates the ancillary files in \texttt{anc/}, and \texttt{scripts/sequential\_tables.py} and \texttt{scripts/plot\_sequential.py} regenerate the tables and figures. Throughout, $\alpha=0.05$ and chains start from their stationary law.
+
+\paragraph{Validity.} Table~\ref{tab:validity} and Figure~\ref{fig:validity} report false-alarm rates over 1{,}000 trajectories of 20{,}000 steps for each reversible setting. The loop test is checked after every step. The likelihood e-process and the likelihood-ratio test (LRT) are checked at about 300 checkpoints: every step up to 64, then a geometric grid. The LRT uses the $\chi^2$ reference distribution with $(k-1)(k-2)/2$ degrees of freedom, the number of independent cycle constraints on a complete graph.
+
+Both anytime tests stay within level. The likelihood e-process raised no false alarms in 8{,}000 runs, which is consistent with its conservative overhead. The LRT is calibrated at its planned sample size (4.2--5.7\%) but rejects 24--36\% of reversible trajectories when checked 10 times and 44--60\% when checked at every checkpoint. The birth--death chain lives on a tree and is always reversible; every loop factor there is exactly 1.
+
+Three settings observe a reversible hidden chain through a noisy or lumping channel. The observed processes are reversible but not Markov, so no theorem above covers them. The loop test's false-alarm rate there is 2.6--4.5\%, which is within level. This is evidence, not a guarantee.
+
+\begin{table}[h!]
+\centering
+\caption{False-alarm rates on reversible processes at $\alpha=0.05$ (1{,}000 trajectories of 20{,}000 steps; 95\% Clopper--Pearson intervals for the loop test). ``Hidden'' rows are reversible but not Markov.}
+\label{tab:validity}
+\resizebox{\linewidth}{!}{\input{tables/seq_validity}}
+\end{table}
+
+\begin{figure}[h!]
+\centering
+\includegraphics[width=0.95\linewidth]{figures/seq_validity.pdf}
+\caption{False alarms on reversible processes. The loop test is checked after every step; the likelihood-based tests at about 300 checkpoints.}
+\label{fig:validity}
+\end{figure}
+
+\paragraph{Detection.} Table~\ref{tab:detection} and Figure~\ref{fig:detection} report detection times over 400 trajectories per irreversible chain. The comparison is a fixed-$n$ LRT with critical values calibrated by simulating 1{,}000 trajectories of the least favorable reversible chain $M$. Its sample size is the smallest $n$ with 80\% power against the true chain. This baseline is idealized: it is told the right sample size in advance, which no experimenter knows. With asymptotic $\chi^2$ cutoffs it would appear up to 36\% cheaper, because those cutoffs are anti-conservative at small $n$.
+
+Near equilibrium ($\rho<0.07$ bits/step), the loop test's 80th-percentile detection time is 1.7--1.9 times the fixed-sample size, and its median roughly equals that size. Far from equilibrium the ratio rises to 2.5--4.2, because of the burn-in and the discarded within-loop information. These chains are detected within about a hundred steps. The likelihood e-process needs 3.5--8.7 times the fixed-sample size. No median falls below the floor $\log_2(20)/\rho$ of Theorem~\ref{thm:lower}. Medians and percentiles carry Monte Carlo error of about $\pm8\%$.
+
+\begin{table}[h!]
+\centering
+\caption{Detection times (steps) on irreversible chains at $\alpha=0.05$: the fixed-$n$ LRT sample size for 80\% power (calibrated by simulation), the loop test's median and 80th percentile, and the likelihood e-process's 80th percentile. Ratios are relative to the fixed-$n$ LRT. The floor $\log_2(20)/\rho$ is the asymptotic bound of Theorem~\ref{thm:lower}.}
+\label{tab:detection}
+\resizebox{\linewidth}{!}{\input{tables/seq_detection}}
+\end{table}
+
+\begin{figure}[h!]
+\centering
+\includegraphics[width=0.62\linewidth]{figures/seq_detection.pdf}
+\caption{Price of anytime validity: steps until 80\% of trajectories have rejected, against the idealized fixed-sample LRT sample size.}
+\label{fig:detection}
+\end{figure}
+
+\paragraph{Growth rates.} Over 20 trajectories of $2\times10^5$ steps, the likelihood e-process's $\frac1t\log_2E_t$ converges to $\rho$ (Figure~\ref{fig:growth}). The final rates and $\rho$ are 0.1430 vs 0.1429, 0.0143 vs 0.0145, 0.2997 vs 0.3000 for a one-way ring with $\sigma=\infty$, and 0.1605 vs 0.1614. The loop test settles at its lower oracle rate.
+
+\begin{figure}[h!]
+\centering
+\includegraphics[width=0.62\linewidth]{figures/seq_growth.pdf}
+\caption{Evidence growth. Solid: likelihood e-process (10--90\% band); dashed: $\rho$; dash-dot: loop test.}
+\label{fig:growth}
+\end{figure}
+
+\paragraph{$\rho$ versus $\sigma$.} Over 300 random chains, $\rho$ lies below $\sigma/2$ and tracks $\sigma/4$ near equilibrium, bending further below it as $\sigma$ grows (Figure~\ref{fig:rates}).
+
+\begin{figure}[h!]
+\centering
+\includegraphics[width=0.45\linewidth]{figures/seq_rates.pdf}
+\caption{The optimal detection rate $\rho$ against entropy production $\sigma$ for 300 random chains.}
+\label{fig:rates}
+\end{figure}
+
+\paragraph{Review and reproduction.} Before the final runs, an independent adversarial review checked the proofs and code. It found a gap in an earlier version, which averaged loop tests over reference states; that version was replaced. It also found that the baseline LRT was anti-conservative, and it is now calibrated by simulation. An independent reproduction regenerated the growth, efficiency, and rate experiments with byte-identical output. It also reimplemented the loop test from the written specification alone and obtained 3.8\% [2.5, 5.7] false alarms on a reversible four-state chain and a median detection time of 394 steps against our 407 for the $q=0.2$ ring.
+
+\section{Discussion}
+
+\paragraph{Summary.} Deciding whether a system is at equilibrium, from data examined as they arrive, is governed by $\rho$, the divergence to the nearest reversible chain, rather than by the entropy production $\sigma$. The loop test makes this decision with an exact false-alarm guarantee under continuous monitoring, at a modest cost over an idealized fixed-sample design, and with a one-paragraph proof.
+
+\paragraph{Limitations.}
+\begin{itemize}[leftmargin=1.25em,itemsep=0.1em]
+\item The theory covers fully observed, finite-state, first-order Markov chains. For hidden-state records the tests stayed within level in our simulations, but the guarantees do not apply. Excursions of an observed state need not regenerate the hidden state.
+\item The tests certify that detailed balance is broken; they do not give a confidence bound on $\sigma$. Because $\sigma\ge2\rho$, a time-uniform lower confidence bound on $\rho$ would bound $\sigma$ from below. Inverting the loop test over tilted nulls is one route to it.
+\item Far from equilibrium the loop test discards within-loop information. Combining it with the likelihood e-process would require a common filtration; Theorem~\ref{thm:loop}'s loop-indexed martingale does not provide one.
+\end{itemize}
+
+\paragraph{Extensions.} Natural next steps are loop tests for hidden Markov models through regeneration states, higher-order and continuous-time versions, and time-uniform confidence sequences for $\rho$.
+
+\section*{Code and data}
+Code, ancillary data, and scripts are at \url{https://github.com/jbwinters/Evidence-Holonomy}. \texttt{scripts/reproduce\_all.sh} regenerates every number, table, and figure, and this document.
+
+\section*{Acknowledgements}
+Portions of the text, code, and analysis were drafted or revised with assistance from AI language models (OpenAI's GPT-5 and Anthropic's Claude), including independent AI review and reproduction runs. The author verified the content and takes full responsibility for the paper.
+
+\appendix
+
+\section{Estimating entropy production}\label{app:estimation}
+
+The earlier version of this work studied an estimator of $\sigma$ itself. We summarize it here as a companion to the tests.
+
+\paragraph{The plug-in estimator.} Given $x_{0:n-1}$, let $y=x_{1:n-1}$ and $\tilde y$ its reversal. Fit KT mixtures over Markov orders $0,\dots,R$ to $y$ and to $\tilde y$, freeze them as predictors $\hat p$ and $\hat q$, and set
+\[
+\hat\sigma_{n,R}=\frac1{n-1}\sum_t\log_2\frac{\hat p(y_t\mid y_{t-R:t-1})}{\hat q(y_t\mid y_{t-R:t-1})}.
+\]
+This is an in-sample plug-in estimate of the divergence of \cite{roldanparrondo2010,roldanparrondo2012}. For an irreducible chain with $T_{ij}>0\Leftrightarrow T_{ji}>0$ and $R\ge1$, $\hat\sigma_{n,R}\to\sigma$ almost surely. Block frequencies of $y$ and $\tilde y$ converge to those of $P$ and $P^\ast$, the mixture posterior abandons the inadequate order 0, and the ergodic theorem applies. Estimates for different $R\ge1$ nearly coincide. That reflects a shared, correctly specified model class, not independence from the choice of coder.
+
+\paragraph{Why universality alone does not justify KL estimation.} Pointwise universality of a code controls code lengths only on paths typical for the law it is universal for. Distinct stationary ergodic laws are mutually singular, so a universal code for $P^\ast$ says nothing about the code length of a path drawn from $P$. Differences of separate compressions estimate the entropy-rate difference, which vanishes for time reversal. Estimating $\KL(P\|P^\ast)$ requires a model of $P^\ast$ that is accurate on contexts typical for $P$, and a finite-order plug-in supplies one for finite-state Markov chains.
+
+\paragraph{Hidden-state records.} If $Y$ observes a Markov chain $Z$ through a memoryless channel, then reversing the observation equals observing the reversal. By data processing, $\KL(P^Y_m\|P^{Y\ast}_m)\le(m-1)\sigma_Z$ for every $m$ \cite{gomezmarin2008}. The order-$R$ estimator targets the conditional increment $d_R=D_{R+1}-D_R$. Averages of these increments are bounded by $\sigma_Z$, but a single $d_R$ need not be.
+
+\paragraph{Numerical validation.} Table~\ref{tab:markov} and Figure~\ref{fig:markov-conv} follow 15 random chains ($\sigma$ from 0.0067 to 1.92 bits/step). The median relative error falls from 10.3\% at $n=2^9$ to 1.3\% at $n=2^{15}$. On 60 further chains at $n=2^{15}$, the correlation with $\sigma$ is 0.9994 (Figure~\ref{fig:calibration}). On reversible chains the positive in-sample bias shrinks roughly as $1/n$: 0.0015 bits/step at $n=2^{11}$ and 0.00013 at $2^{15}$ for three states. A hidden three-state ring with $\sigma_Z=0.646$ seen through a noisy channel yields 0.085--0.127 bits/step. Merging two of its states makes the observed process exactly reversible, and the estimate falls to at most $7\times10^{-5}$ (Figure~\ref{fig:hmm}).
 
 \input{tables/table_markov_sanity}
 
 \begin{figure}[h!]
-  \centering
-  \includegraphics[width=0.8\linewidth]{figures/markov_convergence.pdf}
-  \caption{Estimate divided by the analytic $\sigma$ for 15 random chains (thin lines, colored by state count) and their median (black), as the sample length grows.}
-  \label{fig:markov-conv}
+\centering
+\includegraphics[width=0.7\linewidth]{figures/markov_convergence.pdf}
+\caption{Estimate divided by $\sigma$ for 15 random chains and their median, as the sample length grows.}
+\label{fig:markov-conv}
 \end{figure}
-
-\paragraph{Calibration.} Figure~\ref{fig:calibration} compares the estimate with the analytic $\sigma$ for 60 further random chains (3--5 states, bias parameter drawn uniformly from $[0,0.9]$) at $n=2^{15}$. The correlation is $r=0.9994$, and the median relative error is 1.9\%. Relative errors are large only where $\sigma$ itself is tiny: the worst case is a chain with $\sigma\approx10^{-4}$ bits/step, whose absolute error is at the level of the in-sample bias below. For the 53 chains with $\sigma\ge 0.05$ bits/step, the median relative error is 1.7\% and the largest is 10.4\%.
 
 \begin{figure}[h!]
-  \centering
-  \includegraphics[width=0.55\linewidth]{figures/calibration.pdf}
-  \caption{Estimate ($R=3$, $n=2^{15}$) against analytic entropy production for 60 random chains.}
-  \label{fig:calibration}
+\centering
+\begin{minipage}{0.46\linewidth}\centering
+\includegraphics[width=\linewidth]{figures/calibration.pdf}
+\caption{Estimate ($R=3$, $n=2^{15}$) against $\sigma$ for 60 random chains.}
+\label{fig:calibration}
+\end{minipage}\hfill
+\begin{minipage}{0.5\linewidth}\centering
+\includegraphics[width=\linewidth]{figures/hmm_order_sweep.pdf}
+\caption{Estimates on observed records of a hidden ring, by mixture order.}
+\label{fig:hmm}
+\end{minipage}
 \end{figure}
 
-\paragraph{Reversible chains and bias.} For 10 random detailed-balance chains of each size ($\sigma=0$), the mean estimate with $R=3$ is 0.0015 bits/step at $n=2^{11}$ and 0.00013 at $n=2^{15}$ for 3-state chains, and 0.0100 and 0.00072 for 5-state chains. Estimates with $R=1$ and $R=3$ are identical. The bias shrinks by a factor of 12--14 over a 16-fold increase in $n$, consistent with the roughly $1/n$ behavior described in Section~\ref{sec:estimation}.
+\section{Evidence holonomy}\label{app:holonomy}
 
-\paragraph{Order robustness and closed forms.} On first-order chains, estimates with $R=1,2,3,5$ agree to within $10^{-13}$ bits/step, as the remark in Section~\ref{sec:estimation} predicts. The validation battery (\texttt{uec-battery --run\_suite}) also checks:
+The earlier version framed irreversibility as a holonomy of evidence. A loop of representation transforms $L_n$ maps a path back to the original alphabet. Two functionals compare evidence before and after the loop.
 \begin{itemize}[leftmargin=1.25em,itemsep=0.1em]
-\item three-state rings with closed-form $\sigma$, to within 5\% relative error at $n=1.5\times10^5$;
-\item a reversible two-state chain (estimate below $5\times10^{-4}$);
-\item gauge loops (below $5\times10^{-3}$);
-\item agreement with a smoothed transition-count estimator;
-\item block-bootstrap coverage of $\sigma$;
-\item negative controls: alphabet mismatch, empty outputs, and self-evidence differences, which stay near zero under reversal even when $\sigma>0$.
+\item \emph{Representation-space holonomy} $\code(L_n(x))-\code(x)$ scores each representation with its own universal code. Its rate is the entropy-rate difference $h(Q)-h(P)$, where $Q=(L_n)\push P$.
+\item \emph{KL holonomy} $\log_2(P_n(x)/Q_n(x))$ scores the original path under the loop's pushforward law. Its rate is $\KL$-rate $\mathsf d(P\|Q)$.
 \end{itemize}
+For the time-reversal loop, the first vanishes, since reversal preserves entropy rates. The second equals $\sigma$ for Markov chains \cite{gaspard2004}.
 
-\paragraph{Hidden-state records.} Figure~\ref{fig:hmm} observes a three-state ring ($p=0.3$ forward, $q=0.05$ backward, $\sigma_Z=0.646$ bits/step) through two channels, for $n=2^{17}$ and three seeds. Through a noisy channel that reports the true state with probability $0.8$, the estimates for $R=1,\dots,6$ range from 0.085 to 0.127 bits/step, well below $\sigma_Z$. They rise from $R=1$ to $R=3$ and then stay the same: at this sample size the mixture puts negligible weight on orders above 3, so larger $R$ adds nothing. Through a channel that merges states 1 and 2, the observation is symmetric under the relabeling that maps the ring to its reversal. The observed process is therefore exactly reversible, and the estimates stay at most $7\times10^{-5}$ bits/step even though $\sigma_Z>0$.
+In practice every loop we examined reduced to one of three cases:
+\begin{itemize}[leftmargin=1.25em,itemsep=0.1em]
+\item literal reversal, which gives the estimator of Appendix~\ref{app:estimation};
+\item a bijection, which gives zero;
+\item a deterministic coarse-grain-and-lift, which gives an infinite KL rate.
+\end{itemize}
+So the general formalism organizes known results rather than producing new ones. The loop test of Section~\ref{sec:loop} is the version of this idea that does work: evidence accumulated around the chain's own cycles, weighed against their reversals.
 
-\begin{figure}[h!]
-  \centering
-  \includegraphics[width=0.65\linewidth]{figures/hmm_order_sweep.pdf}
-  \caption{Estimates on observed records of a hidden three-state ring, by KT mixture order $R$ (mean and range over three seeds), against the hidden chain's entropy production.}
-  \label{fig:hmm}
-\end{figure}
+\begin{thebibliography}{40}
 
-\paragraph{Arrow-of-time demonstrations.} The package also applies the estimator to quantized real-valued signals (audio, sensor, and price series; images and video via vector quantization). It compares held-out windows with their literal reversals and reports an AUC with a block-bootstrap interval. On i.i.d.\ noise with $10^4$ samples, single-run AUCs ranged from 0.11 to 0.74 across seeds. So these demonstrations are illustrations whose intervals must be read, not validation of the theory.
+\bibitem{andrieux2025}
+D. Andrieux, ``Irreversibility as divergence from equilibrium,'' \emph{J. Stat. Phys.}, 192:146, 2025.
 
-\section{Code and data}
+\bibitem{chazottesredig2005}
+J.-R. Chazottes and F. Redig, ``Testing the irreversibility of a Gibbsian process via hitting and return times,'' \emph{Nonlinearity}, 18:2477--2489, 2005.
 
-Code, ancillary data, and scripts are at \url{https://github.com/jbwinters/Evidence-Holonomy}. \texttt{scripts/reproduce\_all.sh} regenerates \texttt{anc/}, the table, the figures, and this document.
+\bibitem{cristadoro2023}
+G. Cristadoro, M. Degli Esposti, V. Jak\v{s}i\'c, and R. Raqu\'epas, ``Recurrence times, waiting times and universal entropy production estimators,'' \emph{Lett. Math. Phys.}, 2023; arXiv:2209.09716.
 
-\section*{Discussion}
-The two holonomies answer different questions. Evaluating each representation with its own universal code gives the entropy-rate difference $h(Q)-h(P)$: it is insensitive to the choice of code and detects net compression or expansion, but it vanishes for time reversal. Evaluating the original path under the loop's pushforward law gives the relative-entropy rate $\mathsf{d}(P\|Q)$, which for Markov time reversal is the entropy production rate. The second quantity is the one that captures irreversibility. It requires a consistent model of the reversed process on forward-typical contexts, and a finite-order plug-in estimator supplies one for finite-state Markov chains.
+\bibitem{fill1991}
+J. A. Fill, ``Eigenvalue bounds on convergence to stationarity for nonreversible Markov chains, with an application to the exclusion process,'' \emph{Ann. Appl. Probab.}, 1(1):62--87, 1991.
 
-\paragraph{Extensions.} Quantizing a continuous process and observing a Markov chain through a memoryless channel are both instances of \eqref{eq:dpi}. The observed irreversibility rate therefore bounds the underlying entropy production from below \cite{gomezmarin2008}; the quantum analogue follows from the monotonicity of quantum relative entropy \cite{lindblad1975,uhlmann1977}. Turning finite-sample, finite-order estimates into certified bounds would require controlling both the in-sample bias and the order-wise terms $d_R$.
+\bibitem{friedwolfer2022}
+S. Fried and G. Wolfer, ``Identity testing of reversible Markov chains,'' \emph{Proc. AISTATS}, PMLR 151, 2022.
 
-\paragraph{Limitations.} The results assume finite alphabets, stationarity, and ergodicity. The consistency result covers finite-state Markov chains; for hidden-state records, the estimator targets the conditional quantities $d_R$, not $\sigma_Z$. Estimates carry a positive finite-sample bias (empirically of order $1/n$) and $O(n^{-1/2})$ fluctuations. The loop formalism organizes these estimators but does not by itself supply new estimators for loops other than time reversal.
-
-\section*{Acknowledgements}
-Portions of the text were drafted or revised with assistance from AI language models (OpenAI's GPT-5 and Anthropic's Claude). The author verified all content and takes full responsibility for the paper.
-
-\begin{thebibliography}{20}
-
-\bibitem{ziv1978}
-J. Ziv and A. Lempel, ``Compression of individual sequences via variable-rate coding,'' \emph{IEEE Trans. Inf. Theory}, 24(5):530--536, 1978.
-
-\bibitem{kt1981}
-R. E. Krichevsky and V. K. Trofimov, ``The performance of universal encoding,'' \emph{IEEE Trans. Inf. Theory}, 27(2):199--207, 1981.
-
-\bibitem{willems1995ctw}
-F. M. J. Willems, Y. M. Shtarkov, and T. J. Tjalkens, ``The Context-Tree Weighting Method: Basic Properties,'' \emph{IEEE Trans. Inf. Theory}, 41(3):653--664, 1995.
-
-\bibitem{barron1985}
-A. R. Barron, ``The strong ergodic theorem for densities: generalized Shannon--McMillan--Breiman theorem,'' \emph{Annals of Probability}, 13(4):1292--1303, 1985.
-
-\bibitem{shields1996}
-P. C. Shields, \emph{The Ergodic Theory of Discrete Sample Paths}, Graduate Studies in Mathematics, Vol. 13, American Mathematical Society, 1996.
-
-\bibitem{csiszarshields2004}
-I. Csisz\'ar and P. C. Shields, ``Information theory and statistics: A tutorial,'' \emph{Foundations and Trends in Communications and Information Theory}, 1(4):417--528, 2004.
-
-\bibitem{coverthomas}
-T. M. Cover and J. A. Thomas, \emph{Elements of Information Theory}, 2nd ed., Wiley, 2006.
-
-\bibitem{schnakenberg1976}
-J. Schnakenberg, ``Network theory of microscopic and macroscopic behavior of master equation systems,'' \emph{Reviews of Modern Physics}, 48(4):571--585, 1976.
-
-\bibitem{crooks1999}
-G. E. Crooks, ``Entropy production fluctuation theorem and the nonequilibrium work relation for free energy differences,'' \emph{Phys. Rev. E}, 60:2721--2726, 1999.
-
-\bibitem{kawai2007}
-R. Kawai, J. M. R. Parrondo, and C. Van den Broeck, ``Dissipation: The phase-space perspective,'' \emph{Phys. Rev. Lett.}, 98:080602, 2007.
-
-\bibitem{seifert2012}
-U. Seifert, ``Stochastic thermodynamics, fluctuation theorems and molecular machines,'' \emph{Reports on Progress in Physics}, 75:126001, 2012.
+\bibitem{gaspard2004}
+P. Gaspard, ``Time-reversed dynamical entropy and irreversibility in Markovian random processes,'' \emph{J. Stat. Phys.}, 117:599--615, 2004.
 
 \bibitem{gomezmarin2008}
 A. Gomez-Marin, J. M. R. Parrondo, and C. Van den Broeck, ``Lower bounds on dissipation upon coarse graining,'' \emph{Phys. Rev. E}, 78:011107, 2008.
 
+\bibitem{grunwald2024}
+P. Gr\"unwald, R. de Heide, and W. Koolen, ``Safe testing,'' \emph{J. R. Stat. Soc. B}, 86(5):1091--1128, 2024.
+
+\bibitem{jiang2018}
+Q. Jiang, M. Hlynka, P. H. Brill, and C. H. Cheung, ``Reversibility checking for Markov chains,'' arXiv:1806.10154, 2018.
+
+\bibitem{kim2020}
+D.-K. Kim, Y. Bae, S. Lee, and H. Jeong, ``Learning entropy production via neural networks,'' \emph{Phys. Rev. Lett.}, 125:140604, 2020.
+
+\bibitem{kt1981}
+R. E. Krichevsky and V. K. Trofimov, ``The performance of universal encoding,'' \emph{IEEE Trans. Inf. Theory}, 27(2):199--207, 1981.
+
+\bibitem{martinez2019}
+I. A. Mart\'inez, G. Bisker, J. M. Horowitz, and J. M. R. Parrondo, ``Inferring broken detailed balance in the absence of observable currents,'' \emph{Nat. Commun.}, 10:3542, 2019.
+
+\bibitem{martiniani2019}
+S. Martiniani, P. M. Chaikin, and D. Levine, ``Quantifying hidden order out of equilibrium,'' \emph{Phys. Rev. X}, 9:011031, 2019.
+
+\bibitem{pietzonka2021}
+P. Pietzonka, J. Guioth, and R. L. Jack, ``Cycle counts and affinities in stochastic models of non-equilibrium systems,'' \emph{Phys. Rev. E}, 104:064137, 2021.
+
+\bibitem{ramdas2023}
+A. Ramdas, P. Gr\"unwald, V. Vovk, and G. Shafer, ``Game-theoretic statistics and safe anytime-valid inference,'' \emph{Statist. Sci.}, 38(4):576--601, 2023.
+
+\bibitem{ro2022}
+S. Ro, B. Guo, A. Shih, T. V. Phan, R. H. Austin, D. Levine, P. M. Chaikin, and S. Martiniani, ``Model-free measurement of local entropy production and extractable work in active matter,'' \emph{Phys. Rev. Lett.}, 129:220601, 2022.
+
+\bibitem{roldan2015}
+\'E. Rold\'an, I. Neri, M. D\"orpinghaus, H. Meyr, and F. J\"ulicher, ``Decision making in the arrow of time,'' \emph{Phys. Rev. Lett.}, 115:250602, 2015.
+
 \bibitem{roldanparrondo2010}
-\'E. Rold\'an and J. M. R. Parrondo, ``Estimating Dissipation from Single Stationary Trajectories,'' \emph{Phys. Rev. Lett.}, 105:150607, 2010.
+\'E. Rold\'an and J. M. R. Parrondo, ``Estimating dissipation from single stationary trajectories,'' \emph{Phys. Rev. Lett.}, 105:150607, 2010.
 
-\bibitem{lindblad1975}
-G. Lindblad, ``Completely positive maps and entropy inequalities,'' \emph{Communications in Mathematical Physics}, 40:147--151, 1975.
+\bibitem{roldanparrondo2012}
+\'E. Rold\'an and J. M. R. Parrondo, ``Entropy production and Kullback--Leibler divergence between stationary trajectories of discrete systems,'' \emph{Phys. Rev. E}, 85:031129, 2012.
 
-\bibitem{uhlmann1977}
-A. Uhlmann, ``Relative entropy and the Wigner--Yanase--Dyson--Lieb concavity in an interpolation theory,'' \emph{Communications in Mathematical Physics}, 54:21--32, 1977.
+\bibitem{schnakenberg1976}
+J. Schnakenberg, ``Network theory of microscopic and macroscopic behavior of master equation systems,'' \emph{Rev. Mod. Phys.}, 48(4):571--585, 1976.
+
+\bibitem{seifert2012}
+U. Seifert, ``Stochastic thermodynamics, fluctuation theorems and molecular machines,'' \emph{Rep. Prog. Phys.}, 75:126001, 2012.
+
+\bibitem{steuber2012}
+T. L. Steuber, P. C. Kiessler, and R. Lund, ``Testing for reversibility in Markov chain data,'' \emph{Probab. Eng. Inf. Sci.}, 26(4):593--611, 2012.
+
+\bibitem{trendelkamp2015}
+B. Trendelkamp-Schroer, H. Wu, F. Paul, and F. No\'e, ``Estimation and uncertainty of reversible Markov models,'' \emph{J. Chem. Phys.}, 143:174101, 2015.
+
+\bibitem{wasserman2020}
+L. Wasserman, A. Ramdas, and S. Balakrishnan, ``Universal inference,'' \emph{Proc. Natl. Acad. Sci. USA}, 117(29):16880--16890, 2020.
+
+\bibitem{wolfer2021}
+G. Wolfer and S. Watanabe, ``Information geometry of reversible Markov chains,'' \emph{Information Geometry}, 4:393--433, 2021.
+
+\bibitem{zivmerhav1993}
+J. Ziv and N. Merhav, ``A measure of relative entropy between individual sequences with application to universal classification,'' \emph{IEEE Trans. Inf. Theory}, 39(4):1270--1279, 1993.
 
 \end{thebibliography}
 

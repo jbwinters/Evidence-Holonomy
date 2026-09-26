@@ -52,6 +52,12 @@ from .aot import (
     aot_from_series,
     discretize_series,
 )
+from .sequential import (
+    eprocess_reversibility,
+    loop_eprocess_reversibility,
+    reversible_mle,
+    reversible_projection_rate,
+)
 from .bio import (
     iaaft_surrogate,
     circular_shift_surrogate,
@@ -70,6 +76,10 @@ from .bio import (
 )
 
 __all__ = [
+    "eprocess_reversibility",
+    "loop_eprocess_reversibility",
+    "reversible_mle",
+    "reversible_projection_rate",
     "_row_stochastic",
     "stationary_distribution",
     "sample_markov",

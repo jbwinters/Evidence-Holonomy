@@ -2,16 +2,24 @@
 
 [![CI](https://github.com/jbwinters/Evidence-Holonomy/actions/workflows/ci.yml/badge.svg)](https://github.com/jbwinters/Evidence-Holonomy/actions/workflows/ci.yml)
 
-Estimate how irreversible a process is from a single discrete trajectory.
+Detect and measure irreversibility (broken detailed balance) from a single
+discrete trajectory.
 
-The package measures the relative-entropy rate D(P‖P_rev) between a process
-and its time reversal, in bits per step. For a stationary finite-state Markov
-chain this equals the entropy production rate σ. For a record observed
-through a noisy or coarse-grained channel, the observed rate bounds the hidden
-entropy production from below. The paper
-([`uec_theory.pdf`](uec_theory.pdf), source [`uec_theory.tex`](uec_theory.tex))
-frames this as a "holonomy" of evidence around a loop of representation
-transforms, proves the reductions, and reports the numerical checks.
+- **Test, as data arrive.** `uec.sequential` provides tests of detailed
+  balance that stay valid when checked after every observation. The
+  loop-orientation test bets on the direction of each loop the chain makes;
+  under equilibrium every direction is a fair coin.
+- **Measure.** `uec.holonomy` estimates the relative-entropy rate
+  D(P‖P_rev) between a process and its time reversal. For a stationary
+  Markov chain this equals the entropy production rate σ.
+
+The paper ([`uec_theory.pdf`](uec_theory.pdf), source
+[`uec_theory.tex`](uec_theory.tex)) shows that no test can detect broken
+detailed balance faster than ρ bits per step, the divergence to the nearest
+reversible chain; this is at most σ/2, and about σ/4 near equilibrium. It
+presents tests that reach or approach that rate, with seeded experiments.
+The estimator and the earlier "evidence holonomy" framing are in its
+appendices.
 
 ![A biased and an unbiased three-state ring, each played forward and backward, with the running estimate](figures/forward_vs_reverse.gif)
 
@@ -57,10 +65,37 @@ length per symbol estimates D(P‖P_rev).
   so estimates carry a small positive bias. For reversible chains it shrinks
   roughly as 1/n. Use `uec.battery.bootstrap_klrate` for intervals.
 
-The paper's Section 4 gives the precise statements. On 60 random chains, the
+The paper's Section 4 gives the precise statements.
+
+**Prior work.** None of this is a new estimator. The identity between
+entropy production and the forward/reverse relative-entropy rate is due to
+Gaspard (2004). Estimating it from one trajectory, including with
+compression, follows Roldán & Parrondo (2010, 2012). Universal
+hitting/waiting-time estimators come from Chazottes & Redig (2005) and
+Cristadoro et al. (2023). What this repository adds is a tested
+implementation, a careful account of when the estimate can be trusted, and
+the loop framing in the paper. The paper's "Related work" section has full
+references. On 60 random chains, the
 estimates at n = 2¹⁵ track the analytic σ closely (r = 0.9994):
 
 ![Estimate vs analytic entropy production for 60 random chains](figures/calibration.png)
+
+## Testing for equilibrium as data arrive
+
+The paper's main result; a longer research note with the full evidence
+trail is [`docs/anytime_reversibility_test.md`](docs/anytime_reversibility_test.md).
+It develops tests of detailed balance that stay valid when checked after
+every observation. It covers three results:
+
+- the optimal detection rate, which is ρ (the distance to the nearest
+  reversible chain), not the entropy production σ;
+- a likelihood e-process that attains that rate;
+- a simple loop-orientation test (`uec.sequential.loop_eprocess_reversibility`).
+  Near equilibrium it needs 1.7–1.9× the sample size of an idealized
+  fixed-sample test, while a classical test checked repeatedly raises
+  false alarms 24–60% of the time.
+
+![False alarms of anytime vs classical tests](figures/seq_validity.png)
 
 ## Install
 
