@@ -15,7 +15,6 @@ Usage examples:
 from __future__ import annotations
 
 import argparse
-import math
 import os
 import random
 from typing import List
@@ -23,7 +22,8 @@ from typing import List
 import numpy as np
 
 # Use the installed package, or fall back to the repository's src/ directory.
-import sys as _sys, os as _os
+import sys as _sys
+import os as _os
 _src = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), "..", "..", "src"))
 if _src not in _sys.path:
     _sys.path.insert(0, _src)
@@ -36,6 +36,7 @@ def ensure_dir(path: str) -> None:
 
 
 def load_price_volume_symbols(path: str, tail: int, k_r: int, k_v: int, jitter_std: float = 0.0):
+    """Joint (log-return, volume) symbols from an OHLCV CSV: timestamp, open, high, low, close, volume."""
     import csv
     # Load close and volume
     ts: List[float] = []
@@ -121,7 +122,7 @@ def markov_ep_test(k: int, delta: float, n: int, R: int) -> tuple[float, float, 
 
 def main():
     ap = argparse.ArgumentParser(description="UEC diagnostics suite")
-    ap.add_argument("--csv", default="data/kaggle/prices/prices.csv")
+    ap.add_argument("--csv", required=True, help="OHLCV CSV with columns timestamp, open, high, low, close, volume")
     ap.add_argument("--tail", type=int, default=50000)
     ap.add_argument("--k_r", type=int, default=8)
     ap.add_argument("--k_v", type=int, default=6)

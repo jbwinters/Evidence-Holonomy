@@ -13,10 +13,33 @@ entropy production from below. The paper
 frames this as a "holonomy" of evidence around a loop of representation
 transforms, proves the reductions, and reports the numerical checks.
 
-![Estimate vs analytic entropy production for 60 random chains](figures/calibration.png)
+![A biased and an unbiased three-state ring, each played forward and backward, with the running estimate](figures/forward_vs_reverse.gif)
 
-*Estimates at n = 2¹⁵ against the analytic σ for 60 random 3- to 5-state
-chains. Reproduce with `scripts/reproduce_all.sh`.*
+*A process is irreversible when a recording of it can be told apart from the
+same recording played backward. The biased ring mostly steps 0→1→2, so its
+reversal visibly runs the other way, and the estimate settles near its
+entropy production σ = 0.65 bits/step. The unbiased ring looks the same either
+way, and the estimate falls to 0.*
+
+## How it works
+
+The evidence that a recording runs forward is the log-likelihood ratio
+log₂ P(recording) / P(recording reversed). For a Markov chain, each step
+adds a fixed amount, so the total grows linearly, and its slope is the
+entropy production rate:
+
+![Evidence for the forward direction accumulating step by step, with slope σ](figures/evidence_accumulation.gif)
+
+The animation uses the true transition probabilities. The estimator has to
+learn them from the recording itself, which is what the rest of the package does.
+
+What you can measure depends on what you observe. Watching the same hidden
+ring through a noisy sensor reveals only part of its irreversibility. Merging
+two of its states hides it completely, because the merged record looks the
+same backward. An observed record can only understate the hidden entropy
+production:
+
+![One hidden ring seen fully, through noise, and with two states merged, and the estimate for each](figures/hidden_observation.gif)
 
 ## What the estimator is
 
@@ -34,7 +57,10 @@ length per symbol estimates D(P‖P_rev).
   so estimates carry a small positive bias. For reversible chains it shrinks
   roughly as 1/n. Use `uec.battery.bootstrap_klrate` for intervals.
 
-The paper's Section 4 gives the precise statements.
+The paper's Section 4 gives the precise statements. On 60 random chains, the
+estimates at n = 2¹⁵ track the analytic σ closely (r = 0.9994):
+
+![Estimate vs analytic entropy production for 60 random chains](figures/calibration.png)
 
 ## Install
 
@@ -142,7 +168,8 @@ This regenerates:
 - `figures/`
 - `uec_theory.pdf`, when LaTeX is installed
 
-Every number and figure in the paper comes from these files.
+Every number and figure in the paper comes from these files. The README
+animations come from `scripts/make_animations.py`.
 `scripts/package_arxiv.sh` builds an arXiv source bundle.
 
 ## Repository layout

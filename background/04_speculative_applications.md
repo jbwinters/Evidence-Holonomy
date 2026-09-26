@@ -107,8 +107,6 @@ If we found such a signal, we wouldn't need to decode it to know intelligence se
 
 **Satellite imagery time series** - Watch cities grow, forests disappear. Where does development become irreversible?
 
-**Transaction ledgers** - Pure information flow with timestamps. What's the holonomy of different assets?
-
 ## The Weird Ones
 
 **Random.org bitstreams** - True quantum randomness vs pseudorandom. Do they have different holonomy signatures?

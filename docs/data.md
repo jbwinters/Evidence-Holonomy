@@ -24,10 +24,8 @@ Notes
 
 Place your CSVs under `data/kaggle/` (ignored by Git). Any time series column (e.g., Close) can be used.
 
-- Example paths (adjust to your files):
-  - `data/kaggle/prices/prices.csv`
-  - `data/kaggle/dowjones/dowjones.csv`
-- Recommended run (price 1‑min close prices):
+- Example path (adjust to your file): `data/kaggle/prices/prices.csv`
+- Recommended run (1‑minute close prices):
 
 ```bash
 uec-aot --aot_csv data/kaggle/prices/prices.csv \
