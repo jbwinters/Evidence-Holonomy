@@ -72,6 +72,22 @@ estimates at n = 2¹⁵ track the analytic σ closely (r = 0.9994):
 
 ![Estimate vs analytic entropy production for 60 random chains](figures/calibration.png)
 
+## Research note: testing for equilibrium as data arrive
+
+[`docs/anytime_reversibility_test.md`](docs/anytime_reversibility_test.md)
+develops tests of detailed balance that stay valid when checked after
+every observation. It covers three results:
+
+- the optimal detection rate, which is ρ (the distance to the nearest
+  reversible chain), not the entropy production σ;
+- a likelihood e-process that attains that rate;
+- a simple loop-orientation test (`uec.sequential.loop_eprocess_reversibility`).
+  Near equilibrium it needs 1.7–1.9× the sample size of an idealized
+  fixed-sample test, while a classical test checked repeatedly raises
+  false alarms 24–60% of the time.
+
+![False alarms of anytime vs classical tests](figures/seq_validity.png)
+
 ## Install
 
 ```bash
