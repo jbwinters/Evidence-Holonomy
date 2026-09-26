@@ -210,11 +210,11 @@ def test_aot_from_series_reversible():
     rng = np.random.default_rng(42)
     x = rng.standard_normal(10000)  # i.i.d. Gaussian (should be nearly reversible)
     
-    res = aot_from_series(x, k=4, R=2, win=512, stride=256, use_diff=True)
-    
-    # Should have lower AUC (closer to 0.5) for reversible signal
-    assert 0.0 <= res["auc"] <= 1.0
-    # Might be closer to 0.5 but not guaranteed due to finite sample effects
+    res = aot_from_series(x, k=4, R=2, win=512, stride=256, use_diff=True, block_wins=2,
+                          rng=np.random.default_rng(0))
+
+    # Single-run AUC is noisy at this size; its interval must allow chance.
+    assert res["auc_ci_lo"] <= 0.5 <= res["auc_ci_hi"]
     
     assert np.isfinite(res["bits_per_step"])
     assert len(res["scores_forward"]) == len(res["scores_reversed"])
@@ -272,3 +272,10 @@ def test_aot_parameter_variations():
     # Both should be valid
     assert 0.0 <= res_diff["auc"] <= 1.0
     assert 0.0 <= res_no_diff["auc"] <= 1.0
+
+
+def test_aot_constant_signal_is_chance():
+    # Identical models and equal-length windows: every score ties, so AUC = 0.5.
+    x = np.zeros(20000)
+    res = aot_from_series(x, k=4, R=2, win=512, stride=256, B=10)
+    assert res["auc"] == pytest.approx(0.5)

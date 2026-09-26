@@ -6,8 +6,15 @@ Semantics:
   then evaluates cross-entropy on P to estimate D(P||Q) per symbol.
 - klrate_holonomy_general: applies a loop of transforms, aligns lengths,
   and computes KL-rate between original and looped sequences.
-- klrate_holonomy_time_reversal_markov: canonical Markov loop (encode→reverse→
-  decode-second) with length alignment to seq[1:], matching the EP identity.
+- klrate_holonomy_time_reversal_markov: time-reversal estimator. The loop
+  encode→reverse→decode-second returns exactly reversed(seq[1:]); the result is
+  the order-R plug-in estimate of D(P||P_rev), which converges to the entropy
+  production rate for finite-state Markov chains when R >= 1.
+- klrate_holonomy_leadlag_markov: the same estimator applied to the tau-step
+  skeleton seq[o::tau], averaged over phases.
+
+Note: both models are evaluated on the sequence they were trained on (in-sample
+plug-in), so estimates carry a small positive bias of order k**(R+1)/n.
 """
 
 from __future__ import annotations
@@ -16,7 +23,6 @@ from .coders import KTMarkovMixture
 from .transforms import (
     TransitionDecodeTakeSecond,
     TransitionEncode,
-    TransitionEncodeLag,
     TimeReverse,
     apply_loop,
     Transform,
@@ -96,11 +102,10 @@ def klrate_holonomy_general(
 
 
 def klrate_holonomy_time_reversal_markov(seq: Sequence[int], k: int, R: int = 3, coder: str = "kt") -> float:
-    """KL-rate holonomy for the canonical Markov time-reversal loop.
-    This is an estimator for the (ideal) KL-holonomy rate defined in the paper.
+    """Time-reversal KL-rate estimate D(P||P_rev) in bits/step.
 
-    Loop: TransitionEncode(k) → TimeReverse() → TransitionDecodeTakeSecond(k).
-    Align p_eval = seq[1:] to the transition sequence length. Returns bits/step.
+    Loop: TransitionEncode(k) → TimeReverse() → TransitionDecodeTakeSecond(k),
+    which equals reversed(seq[1:]). p_eval = seq[1:] is scored against it.
     """
     E = TransitionEncode(k)
     Rv = TimeReverse()
@@ -113,17 +118,23 @@ def klrate_holonomy_time_reversal_markov(seq: Sequence[int], k: int, R: int = 3,
 def klrate_holonomy_leadlag_markov(
     seq: Sequence[int], k: int, tau: int = 1, R: int = 3, coder: str = "kt"
 ) -> float:
-    """KL-rate holonomy using a lead–lag loop at lag tau.
+    """Time-reversal KL-rate at time scale tau (bits per tau-step).
 
-    Loop: TransitionEncodeLag(k, tau) → TimeReverse() → TransitionDecodeTakeSecond(k).
-    Align p_eval = seq[tau:] to the lag-encoded transition sequence length.
-    Returns bits/step.
+    Estimates the irreversibility of the tau-step skeleton: for each phase
+    o in 0..tau-1 the subsequence seq[o::tau] is scored with the time-reversal
+    estimator, and the phase estimates are averaged (weighted by length).
+    tau=1 reduces to klrate_holonomy_time_reversal_markov. Phases shorter than
+    three symbols are skipped; returns 0.0 if none remain.
     """
+    tau = int(tau)
     if tau <= 0:
-        return 0.0
-    E = TransitionEncodeLag(k, tau=tau)
-    Rv = TimeReverse()
-    D2 = TransitionDecodeTakeSecond(k)
-    q_seq, _ = apply_loop(seq, list(range(k)), [E, Rv, D2])
-    p_eval = list(seq)[tau:]
-    return klrate_between_sequences(p_eval, q_seq, k, R=R, coder=coder)
+        raise ValueError("tau must be a positive integer")
+    x = list(seq)
+    total, weight = 0.0, 0
+    for o in range(tau):
+        sub = x[o::tau]
+        if len(sub) < 3:
+            continue
+        total += klrate_holonomy_time_reversal_markov(sub, k=k, R=R, coder=coder) * (len(sub) - 1)
+        weight += len(sub) - 1
+    return float(total / weight) if weight else 0.0

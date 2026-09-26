@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 from uec.markov import (
     _row_stochastic,
     stationary_distribution,

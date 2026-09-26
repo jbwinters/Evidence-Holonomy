@@ -1,6 +1,5 @@
 import numpy as np
-import pytest
-from uec.coders import KTMarkovMixture, KTFrozenPredictor, LZ78Coder
+from uec.coders import KTMarkovMixture, LZ78Coder
 
 
 class TestKTMarkovMixture:

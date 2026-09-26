@@ -3,7 +3,7 @@ import tempfile
 import os
 import json
 import numpy as np
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from uec.cli import run_battery, run_aot
 
 
@@ -23,10 +23,10 @@ class TestRunBattery:
             run_battery(['--fast', '--seed', '123', '--n', '1000'])
             
             captured = capsys.readouterr()
-            assert 'UEC Battery (minimal): starting' in captured.out
-            assert 'UEC Battery (minimal): done' in captured.out
+            assert 'UEC Battery (single chain): starting' in captured.out
+            assert 'UEC Battery (single chain): done' in captured.out
             assert 'EP analytic' in captured.out
-            assert 'KL-rate hol' in captured.out
+            assert 'KL-rate estimate' in captured.out
             
     def test_run_battery_with_parameters(self, capsys):
         # Test battery with custom parameters
@@ -43,8 +43,8 @@ class TestRunBattery:
             run_battery(['--seed', '456', '--n', '500', '--k', '2', '--order', '2'])
             
             captured = capsys.readouterr()
-            assert 'UEC Battery (minimal): starting' in captured.out
-            assert 'UEC Battery (minimal): done' in captured.out
+            assert 'UEC Battery (single chain): starting' in captured.out
+            assert 'UEC Battery (single chain): done' in captured.out
             
             # Check that functions were called with correct parameters
             mock_markov.assert_called_once()
@@ -153,7 +153,7 @@ class TestRunAoT:
             mock_aot.assert_called_once()
             args, kwargs = mock_aot.call_args
             assert len(args[0]) > 0  # Audio data should be non-empty
-            assert kwargs.get('use_logreturn') == False  # WAV doesn't use log returns
+            assert kwargs.get('use_logreturn') is False  # WAV doesn't use log returns
         
     def test_run_aot_scoreboard_mode(self, capsys):
         # Create temporary CSV files for scoreboard
@@ -235,8 +235,8 @@ class TestRunAoT:
                 assert kwargs['R'] == 2
                 assert kwargs['win'] == 128
                 assert kwargs['stride'] == 64
-                assert kwargs['use_diff'] == True
-                assert kwargs['use_logreturn'] == True
+                assert kwargs['use_diff'] is True
+                assert kwargs['use_logreturn'] is True
                 assert kwargs['sr'] == 1000
                 
         finally:

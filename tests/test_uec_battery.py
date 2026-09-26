@@ -1,38 +1,59 @@
-import pytest
-import tempfile
+"""Tests for the validation battery and the package functions it relies on."""
+
 import os
-import json
+import tempfile
+
 import numpy as np
-import sys
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+import pytest
 
-# Add the root directory to sys.path to import uec_battery
-root_dir = Path(__file__).parent.parent
-if str(root_dir) not in sys.path:
-    sys.path.insert(0, str(root_dir))
-
-from uec_battery import (
-    set_seeds,
-    _row_stochastic,
-    stationary_distribution,
-    sample_markov,
-    entropy_production_rate_bits,
-    random_markov_biased,
-    counts_from_sequence,
-    ep_bits_from_counts_smoothed,
-    KTMarkovMixture,
-    KTFrozenPredictor,
-    LZ78Coder,
-    klrate_between_sequences,
-    klrate_holonomy_time_reversal_markov,
-    quantile_bins,
+from uec import battery
+from uec.aot import (
+    aot_from_series,
+    auc_from_scores,
     discretize_series,
     load_csv_column,
-    auc_from_scores,
+    quantile_bins,
     window_iter,
-    aot_from_series,
 )
+from uec.battery import counts_from_sequence, ep_bits_from_counts_smoothed, set_seeds
+from uec.coders import KTFrozenPredictor, KTMarkovMixture, LZ78Coder
+from uec.holonomy import klrate_between_sequences, klrate_holonomy_time_reversal_markov
+from uec.markov import (
+    _row_stochastic,
+    entropy_production_rate_bits,
+    random_markov_biased,
+    sample_markov,
+    stationary_distribution,
+)
+
+
+class TestBatteryChecks:
+    """Run battery checks at reduced size; each raises AssertionError on failure."""
+
+    @pytest.fixture(autouse=True)
+    def _results_dir(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(battery, "RESULTS_DIR", str(tmp_path))
+
+    def test_gauge(self):
+        battery.check_gauge_invariance(n=20000)
+
+    def test_time_reversal(self):
+        battery.check_time_reversal_equals_ep(n=60000)
+
+    def test_ring(self):
+        battery.check_ring_closed_form(n=150000)
+
+    def test_negative_controls(self):
+        battery.check_mismatch_alphabet_raises(n=2000)
+        battery.check_empty_output_raises()
+        battery.check_naive_contrast(n=30000)
+
+    def test_counts_estimator_matches_ep(self):
+        rng = np.random.default_rng(3)
+        T = random_markov_biased(k=3, delta=0.6, rng=rng)
+        x = sample_markov(T, n=100000, rng=rng)
+        est = ep_bits_from_counts_smoothed(counts_from_sequence(x, 3))
+        assert abs(est - entropy_production_rate_bits(T)) < 0.03
 
 
 class TestUtilities:

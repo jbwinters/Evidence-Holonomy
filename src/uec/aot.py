@@ -7,15 +7,18 @@ Provides:
 - Signed likelihood-ratio scoring using KT frozen models (HQ-HP per window).
 - AUC calculation (tie-aware) and windowed KL-rate with simple block bootstrap.
 
-The AoT pipeline mirrors the time-reversal loop used by KL holonomy, so AUC
-and bits/step align conceptually. Preprocessing flags (use_diff, use_logreturn)
+Forward windows are compared with their literal time reversals. AUC is the
+probability that a forward window scores higher than a reversed one: 0.5 means
+no detectable arrow of time, values toward 1 mean forward windows are
+distinguishable, and values well below 0.5 indicate an artifact or a mislabeled
+direction rather than reversibility. Preprocessing flags (use_diff, use_logreturn)
 help amplify irreversibility in practice for audio/sensors and finance.
 """
 
 from __future__ import annotations
 import numpy as np
 from typing import List, Sequence, Tuple
-from .coders import KTMarkovMixture, KTFrozenPredictor
+from .coders import KTMarkovMixture
 from .holonomy import klrate_between_sequences, klrate_holonomy_time_reversal_markov
 from .transforms import TransitionDecodeTakeSecond, TransitionEncode, TimeReverse, apply_loop
 
@@ -82,7 +85,6 @@ def load_wav_mono(path: str, target_std: float = 1.0) -> Tuple[np.ndarray, int]:
         return x, int(sr)
     except Exception:
         import wave
-        import struct
 
         with wave.open(path, "rb") as wf:
             nchan = wf.getnchannels()
@@ -144,6 +146,27 @@ def auc_from_scores(pos: np.ndarray, neg: np.ndarray) -> float:
     if n1 == 0 or n0 == 0:
         return 0.5
     return float((R1 - n1 * (n1 + 1) / 2.0) / (n1 * n0))
+
+
+def _auc_block_bootstrap(
+    pos: np.ndarray, neg: np.ndarray, block: int, B: int, rng: np.random.Generator
+) -> Tuple[float, float]:
+    """95% block-bootstrap interval for the AUC of paired forward/reversed windows.
+
+    Window i and its reversal are resampled together in contiguous blocks of
+    `block` windows, which respects the overlap between neighbouring windows.
+    Returns (nan, nan) when there are fewer than two blocks.
+    """
+    n = min(len(pos), len(neg))
+    block = max(1, int(block))
+    starts = list(range(0, n - block + 1, block))
+    if len(starts) < 2 or B <= 0:
+        return float("nan"), float("nan")
+    vals = []
+    for _ in range(B):
+        idx = np.concatenate([np.arange(s, s + block) for s in rng.choice(starts, size=len(starts))])
+        vals.append(auc_from_scores(pos[idx], neg[idx]))
+    return float(np.percentile(vals, 2.5)), float(np.percentile(vals, 97.5))
 
 
 def window_iter(seq: Sequence[int], win: int, stride: int) -> List[List[int]]:
@@ -268,10 +291,12 @@ def aot_from_series(
             for wq, qq in zip(wins_q, wins_qq)
         ], dtype=float)
     else:
-        # existing KT path - use full windows like uec_battery.py
-        scores_fwd = np.array([signed_lr_score(w, Pf, Qf, coder) for w in wins_fwd], dtype=float)
+        # Score w[1:] so forward and reversed windows have identical length and
+        # symbols; otherwise the length mismatch biases the comparison.
+        scores_fwd = np.array([signed_lr_score(w[1:], Pf, Qf, coder) for w in wins_fwd], dtype=float)
         scores_rev = np.array([signed_lr_score(wq, Pf, Qf, coder) for wq in wins_q], dtype=float)
     auc = auc_from_scores(scores_fwd, scores_rev)
+    auc_lo, auc_hi = _auc_block_bootstrap(scores_fwd, scores_rev, block_wins, B, rng)
     hol_rate = klrate_holonomy_time_reversal_markov(test, k=k, R=R, coder=coder)
     vals: List[float] = []
     for w in wins_fwd:
@@ -325,6 +350,8 @@ def aot_from_series(
         "win": int(win),
         "stride": int(stride),
         "auc": float(auc),
+        "auc_ci_lo": float(auc_lo),
+        "auc_ci_hi": float(auc_hi),
         "scores_forward": scores_fwd.tolist(),
         "scores_reversed": scores_rev.tolist(),
         "bits_per_step": bits_per_step,

@@ -1,8 +1,8 @@
 """
 Command-line interfaces:
 
-- uec-battery: quick demonstration that KL-rate holonomy ≈ entropy production
-  on finite-state Markov chains using the canonical time-reversal loop.
+- uec-battery: time-reversal KL-rate vs analytic entropy production on a random
+  finite-state Markov chain, or the full validation battery (uec.battery).
 
 - uec-aot: Arrow-of-Time demos for CSV/WAV time-series. Supports single-file
   runs and folder scoreboards; exposes preprocessing flags and random seeds.
@@ -23,24 +23,60 @@ from .adapters import (
 )
 
 
+def _auc_ci(res: dict) -> str:
+    """Format the AUC bootstrap interval, or note that it is unavailable."""
+    lo, hi = res.get("auc_ci_lo"), res.get("auc_ci_hi")
+    if lo is None or hi is None or lo != lo or hi != hi:
+        return "(CI n/a)"
+    return f"[{lo:.3f},{hi:.3f}]"
+
+
 def run_battery(argv: list[str] | None = None) -> None:
-    """Minimal EP ≈ KL-holonomy demonstration with adjustable sample size."""
+    """Estimate EP on one random chain, or run the validation checks.
+
+    Default: one random chain, printing analytic EP vs the estimate (optionally
+    appending a CSV row). --core runs the core checks; --run_suite runs the full
+    battery. Checks append JSON records under results/.
+    """
     p = argparse.ArgumentParser(prog="uec-battery", description="UEC battery: tests and validations")
     p.add_argument("--seed", type=int, default=12345)
     p.add_argument("--n", type=int, default=150_000)
     p.add_argument("--k", type=int, default=3)
     p.add_argument("--order", type=int, default=3)
-    p.add_argument("--fast", action="store_true")
+    p.add_argument("--fast", action="store_true", help="Shorter sequences and fewer sweep repetitions")
     p.add_argument("--strict_ep", action="store_true", help="Raise error on one-way edges")
     p.add_argument("--coder", type=str, choices=["kt", "lz78"], default="kt", help="Coder type for KL estimates")
-    p.add_argument("--out_csv", type=str, help="Output CSV file for results")
+    p.add_argument("--out_csv", type=str, help="Append the single-chain result to this CSV file")
+    p.add_argument("--core", action="store_true", help="Run the core validation checks")
+    p.add_argument("--run_suite", action="store_true", help="Run the full validation battery")
+    p.add_argument("--run_optional", action="store_true", help="Also run HMM and measurement-record demos")
+    p.add_argument("--long", action="store_true", help="Use longer sequences for the three-way and sweep checks")
+    p.add_argument("--sweep_reps", type=int, default=6, help="Random-chain sweep repetitions")
+    p.add_argument("--bootstrap_B", type=int, default=40, help="Bootstrap resamples in the full suite")
     args = p.parse_args(argv)
 
     if args.fast:
         args.n = max(60_000, args.n // 3)
+        args.sweep_reps = max(3, args.sweep_reps // 2)
 
-    print("\n=== UEC Battery (minimal): starting ===")
-    # Time-reversal ≈ EP
+    if args.core or args.run_suite:
+        from . import battery
+
+        battery.set_seeds(args.seed)
+        battery.set_run_id(battery.new_run_id())
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(line_buffering=True)
+        print("\n=== UEC Battery: starting ===")
+        opts = dict(seed=args.seed, n=args.n, k=args.k, R=args.order, sweep_reps=args.sweep_reps,
+                    long=args.long, optional=args.run_optional)
+        if args.run_suite:
+            battery.run_suite(bootstrap_B=args.bootstrap_B, **opts)
+        else:
+            battery.run_core(**opts)
+        print("=== UEC Battery: all checks passed; records in results/ ===")
+        return
+
+    print("\n=== UEC Battery (single chain): starting ===")
     rng = np.random.default_rng(args.seed)
     T = random_markov_biased(k=args.k, delta=0.6, rng=rng)
     sigma_bits = entropy_production_rate_bits(T, strict=args.strict_ep)
@@ -49,17 +85,15 @@ def run_battery(argv: list[str] | None = None) -> None:
     diff = abs(hol_rate - sigma_bits)
     rel = diff / max(1e-8, abs(sigma_bits))
     print(
-        f"[Time reversal] EP analytic={sigma_bits:.6g}  KL-rate hol={hol_rate:.6g}  "
+        f"[Time reversal] EP analytic={sigma_bits:.6g}  KL-rate estimate={hol_rate:.6g}  "
         f"abs diff={diff:.3g}  rel diff={rel:.3%}"
     )
-    
-    # Write to CSV if requested
+
     if args.out_csv:
         import csv
-        import os
         file_exists = os.path.isfile(args.out_csv)
         with open(args.out_csv, "a", newline="") as f:
-            fieldnames = ["seed", "n", "k", "order", "sigma_true", "hol_rate", "abs_err", "rel_err"]
+            fieldnames = ["seed", "n", "k", "order", "coder", "sigma_true", "hol_rate", "abs_err", "rel_err"]
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             if not file_exists:
                 writer.writeheader()
@@ -68,13 +102,14 @@ def run_battery(argv: list[str] | None = None) -> None:
                 "n": args.n,
                 "k": args.k,
                 "order": args.order,
+                "coder": args.coder,
                 "sigma_true": sigma_bits,
                 "hol_rate": hol_rate,
                 "abs_err": diff,
                 "rel_err": rel,
             })
-    
-    print("=== UEC Battery (minimal): done ===")
+
+    print("=== UEC Battery (single chain): done ===")
 
 
 def run_aot(argv: list[str] | None = None) -> None:
@@ -135,7 +170,7 @@ def run_aot(argv: list[str] | None = None) -> None:
             rng=rng,
         )
         print(
-            f"[AoT CSV] AUC={res['auc']:.3f}  bits/step={res['bits_per_step']:.6g}  "
+            f"[AoT CSV] AUC={res['auc']:.3f} {_auc_ci(res)}  bits/step={res['bits_per_step']:.6g}  "
             f"CI=[{res['hol_ci_lo']:.6g},{res['hol_ci_hi']:.6g}]"
         )
         result = {"file": args.aot_csv, **res}
@@ -166,7 +201,7 @@ def run_aot(argv: list[str] | None = None) -> None:
         )
         bps = res["bits_per_second"]
         print(
-            f"[AoT WAV] AUC={res['auc']:.3f}  bits/step={res['bits_per_step']:.6g}  "
+            f"[AoT WAV] AUC={res['auc']:.3f} {_auc_ci(res)}  bits/step={res['bits_per_step']:.6g}  "
             f"bits/s={bps if bps is not None else 'NA'}  "
             f"CI=[{res['hol_ci_lo']:.6g},{res['hol_ci_hi']:.6g}]  sr={sr}Hz"
         )
@@ -213,7 +248,7 @@ def run_aot(argv: list[str] | None = None) -> None:
             )
             
             print(
-                f"[AoT IMAGE] AUC={res['auc']:.3f}  bits/step={res['bits_per_step']:.6g}  "
+                f"[AoT IMAGE] AUC={res['auc']:.3f} {_auc_ci(res)}  bits/step={res['bits_per_step']:.6g}  "
                 f"CI=[{res['hol_ci_lo']:.6g},{res['hol_ci_hi']:.6g}]  mode={args.image_mode}"
             )
             result = {"file": args.aot_image, "mode": args.image_mode, **res}
@@ -255,7 +290,7 @@ def run_aot(argv: list[str] | None = None) -> None:
             
             bps = res["bits_per_second"] 
             print(
-                f"[AoT VIDEO] AUC={res['auc']:.3f}  bits/step={res['bits_per_step']:.6g}  "
+                f"[AoT VIDEO] AUC={res['auc']:.3f} {_auc_ci(res)}  bits/step={res['bits_per_step']:.6g}  "
                 f"bits/s={bps if bps is not None else 'NA'}  "
                 f"CI=[{res['hol_ci_lo']:.6g},{res['hol_ci_hi']:.6g}]  fps={fps:.1f}"
             )
@@ -318,12 +353,14 @@ def run_aot(argv: list[str] | None = None) -> None:
                 rows.append({
                     "file": path,
                     "auc": res["auc"],
+                    "auc_ci_lo": res.get("auc_ci_lo"),
+                    "auc_ci_hi": res.get("auc_ci_hi"),
                     "bits_per_step": res["bits_per_step"],
                     "bits_per_second": res["bits_per_second"],
                     "ci_lo": res["hol_ci_lo"],
                     "ci_hi": res["hol_ci_hi"],
                 })
-                print(f"[Scoreboard] {os.path.basename(path)} AUC={res['auc']:.3f} b/step={res['bits_per_step']:.4g}")
+                print(f"[Scoreboard] {os.path.basename(path)} AUC={res['auc']:.3f} {_auc_ci(res)} b/step={res['bits_per_step']:.4g}")
             except Exception as e:
                 print(f"[Scoreboard] Skipped {path}: {e}")
         if rows:
@@ -334,7 +371,7 @@ def run_aot(argv: list[str] | None = None) -> None:
                 import csv
                 with open(args.scoreboard_csv, "w", newline="") as f:
                     if rows:
-                        fieldnames = ["file", "auc", "bits_per_step", "bits_per_second", "ci_lo", "ci_hi"]
+                        fieldnames = ["file", "auc", "auc_ci_lo", "auc_ci_hi", "bits_per_step", "bits_per_second", "ci_lo", "ci_hi"]
                         writer = csv.DictWriter(f, fieldnames=fieldnames)
                         writer.writeheader()
                         writer.writerows(rows)

@@ -6,7 +6,6 @@ import numpy as np
 import pytest
 import tempfile
 import os
-from pathlib import Path
 
 from src.uec.adapters import (
     load_image_gray, image_to_tokens_raster, image_patches,

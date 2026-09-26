@@ -11,7 +11,6 @@ Implements:
 
 from __future__ import annotations
 from typing import Dict, List, Optional, Sequence, Tuple
-import math
 import numpy as np
 
 from .aot import discretize_series, quantile_bins
@@ -100,8 +99,6 @@ def counts_from_sequence(seq: Sequence[int], k: int) -> np.ndarray:
 def klrate_time_reversal_from_counts(seq: Sequence[int], k: int, alpha: float = 0.5) -> float:
     """Approximate KL-rate holonomy using smoothed transition counts (R=1 analogue)."""
     C = counts_from_sequence(seq, k)
-    N_i = C.sum(axis=1, keepdims=True)
-    T_hat = (C + alpha) / (N_i + alpha * k)
     # Encode transitions -> reverse -> decode second, compare to seq[1:]
     E = TransitionEncode(k)
     Rv = TimeReverse()

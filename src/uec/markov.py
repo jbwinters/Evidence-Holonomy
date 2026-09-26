@@ -17,7 +17,7 @@ See uec_theory.tex for the theory, reductions, and references.
 
 from __future__ import annotations
 import math
-from typing import List, Sequence, Tuple
+from typing import List, Tuple
 import numpy as np
 
 

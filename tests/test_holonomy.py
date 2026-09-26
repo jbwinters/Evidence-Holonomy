@@ -3,9 +3,11 @@ import pytest
 from uec.holonomy import (
     klrate_between_sequences,
     klrate_holonomy_general,
+    klrate_holonomy_leadlag_markov,
     klrate_holonomy_time_reversal_markov,
 )
-from uec.transforms import Permute, TimeReverse, TransitionEncode, TransitionDecodeTakeSecond
+from uec.markov import random_markov_biased, sample_markov
+from uec.transforms import Permute, TimeReverse, TransitionEncode, TransitionDecodeTakeSecond, apply_loop
 
 
 def test_klrate_between_sequences():
@@ -121,3 +123,35 @@ def test_holonomy_functions_consistency():
     
     # They should be similar (within numerical tolerance)
     assert abs(kl1 - kl2) < 0.1
+
+def test_time_reversal_loop_is_literal_reversal():
+    x = [2, 0, 1, 1, 2, 0, 0, 1]
+    q, _ = apply_loop(x, [0, 1, 2], [TransitionEncode(3), TimeReverse(), TransitionDecodeTakeSecond(3)])
+    assert q == list(reversed(x[1:]))
+
+
+def test_leadlag_tau_one_matches_time_reversal():
+    rng = np.random.default_rng(7)
+    x = sample_markov(random_markov_biased(k=3, delta=0.6, rng=rng), n=20000, rng=rng)
+    a = klrate_holonomy_leadlag_markov(x, k=3, tau=1, R=2)
+    b = klrate_holonomy_time_reversal_markov(x, k=3, R=2)
+    assert a == pytest.approx(b)
+
+
+def test_leadlag_depends_on_tau():
+    rng = np.random.default_rng(8)
+    x = sample_markov(random_markov_biased(k=3, delta=0.6, rng=rng), n=30000, rng=rng)
+    x = list(x)
+    r1 = klrate_holonomy_leadlag_markov(x, k=3, tau=1, R=2)
+    r3 = klrate_holonomy_leadlag_markov(x, k=3, tau=3, R=2)
+    manual = np.average(
+        [klrate_holonomy_time_reversal_markov(x[o::3], k=3, R=2) for o in range(3)],
+        weights=[len(x[o::3]) - 1 for o in range(3)],
+    )
+    assert r3 == pytest.approx(manual)
+    assert abs(r1 - r3) > 1e-3
+
+
+def test_leadlag_rejects_nonpositive_tau():
+    with pytest.raises(ValueError):
+        klrate_holonomy_leadlag_markov([0, 1, 2, 0], k=3, tau=0)

@@ -18,6 +18,7 @@ classifiers = [
   "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
   "License :: OSI Approved :: MIT License",
   "Topic :: Scientific/Engineering :: Information Analysis",
   "Intended Audience :: Science/Research",
@@ -33,11 +34,12 @@ video = ["imageio>=2.9", "imageio[ffmpeg]"]
 ml = ["scikit-learn>=1.0"]
 astrobiology = ["statsmodels>=0.14", "scipy>=1.8", "scikit-learn>=1.0", "pandas>=1.5"]
 all = ["scipy>=1.8", "pillow>=8.0", "imageio>=2.9", "imageio[ffmpeg]", "scikit-learn>=1.0", "statsmodels>=0.14", "pandas>=1.5"]
+paper = ["pandas>=1.5", "matplotlib>=3.5"]
 dev = ["pytest>=7", "pytest-cov>=4", "ruff>=0.5", "build>=1.0"]
 
 [project.urls]
-Homepage = "https://github.com/your-org/uec-holonomy"
-Issues = "https://github.com/your-org/uec-holonomy/issues"
+Homepage = "https://github.com/jbwinters/Evidence-Holonomy"
+Issues = "https://github.com/jbwinters/Evidence-Holonomy/issues"
 
 [project.scripts]
 uec-battery = "uec.cli:run_battery"
@@ -46,3 +48,14 @@ uec-aot = "uec.cli:run_aot"
 [tool.hatch.build]
 packages = ["src/uec"]
 
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: longer statistical checks"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]

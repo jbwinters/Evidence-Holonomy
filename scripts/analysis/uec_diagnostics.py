@@ -22,16 +22,13 @@ from typing import List
 
 import numpy as np
 
-# Ensure repo root on path for local module imports
+# Use the installed package, or fall back to the repository's src/ directory.
 import sys as _sys, os as _os
-_repo_root = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), ".."))
-if _repo_root not in _sys.path:
-    _sys.path.insert(0, _repo_root)
+_src = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), "..", "..", "src"))
+if _src not in _sys.path:
+    _sys.path.insert(0, _src)
 
-try:
-    import uec_battery as uec
-except Exception as e:  # pragma: no cover
-    raise SystemExit(f"uec_battery import required for diagnostics: {e}")
+import uec  # noqa: E402
 
 
 def ensure_dir(path: str) -> None:
