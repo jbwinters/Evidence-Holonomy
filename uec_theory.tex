@@ -44,6 +44,12 @@ From Universal Coding to Irreversibility}
 We define an ``evidence holonomy'' functional on loops of representation transforms applied to sample paths, in two versions. \textbf{Representation-space holonomy} scores each representation with its own universal code; by pointwise universality it converges to the entropy-rate difference $h(Q)-h(P)$, where $Q$ is the law of the loop's output. \textbf{KL holonomy} instead scores the original path under the loop's pushforward law; its rate is the relative-entropy rate $\mathsf{d}(P\|Q)$, and for the time-reversal loop of a stationary finite-state Markov chain it equals the entropy production rate $\sigma$ (bits/step). Estimating KL holonomy requires a model of $Q$ that is accurate on paths typical for $P$, which universality alone does not provide. We analyze the order-$R$ plug-in estimator implemented in our code. It is consistent for $\sigma$ on Markov chains for every $R\ge 1$. On records observed through a memoryless channel, averages of its order-wise limits are lower bounds on the hidden entropy production. Numerical checks on random chains, closed-form rings, reversible chains, and a hidden ring show convergence, a small positive finite-sample bias, and the gap between observed and hidden irreversibility.
 \end{abstract}
 
+\section{Related work}
+
+The ingredients are established. For stationary Markov processes, the relative entropy rate between the forward and time-reversed path measures equals the entropy production rate; Gaspard expressed it as the difference between time-reversed and standard entropies per unit time \cite{gaspard2004}. Roldán and Parrondo proposed estimating this Kullback--Leibler divergence from a single stationary trajectory \cite{roldanparrondo2010,roldanparrondo2012}. They used plug-in estimators on finite blocks and a compression-based estimator built on Ziv--Merhav cross-parsing \cite{zivmerhav1993}; the order-$R$ estimator analyzed here is a plug-in estimator of the same kind. Universal estimators based on hitting, return, and waiting times, with consistency and fluctuation results, are due to Chazottes and Redig \cite{chazottesredig2005} and Cristadoro et al.\ \cite{cristadoro2023}. That coarse-grained or partial observation yields lower bounds on dissipation is shown in \cite{gomezmarin2008,roldanparrondo2010}; waiting-time statistics can reveal irreversibility that transition counts miss \cite{martinez2019}. Lossless compression has also been used to quantify order and local entropy production in many-body and active-matter systems \cite{martiniani2019,ro2022}, and neural networks have been trained to estimate entropy production from trajectories \cite{kim2020}.
+
+Our contribution is organizational rather than a new estimator: the loop formalism distinguishes two ways of comparing evidence across a change of representation, identifies which one captures irreversibility, and makes precise why universal coding alone does not justify KL estimation (Section~\ref{sec:estimation}). The numerical study documents the behavior of the order-$R$ plug-in estimator, including its finite-sample bias and its behavior on hidden-state records.
+
 \section{Setup and Definitions}
 
 \paragraph{Alphabet and path space.} Fix a finite alphabet $\X$. Let $\X^n$ denote length-$n$ strings and $\X^{\N}$ the one-sided sequence space with its product $\sigma$-algebra. Let $P$ be a stationary ergodic probability measure on $\X^{\N}$. Write $X_{0:n-1}$ for the length-$n$ prefix of a sample from $P$ and $P_n$ for its law on $\X^n$.
@@ -173,7 +179,7 @@ For a path $x=x_{0:n-1}$ with positive probability,
 \log_2\frac{P_n(x)}{P^{\mathrm{rev}}_n(x)}=\log_2\frac{P_n(x_{0:n-1})}{P_n(x_{n-1},\dots,x_0)}
 = \log_2\frac{\pi_{x_0}}{\pi_{x_{n-1}}} + \sum_{t=1}^{n-1}\log_2\frac{T_{x_{t-1}x_t}}{T_{x_t x_{t-1}}}.
 \]
-Under stationarity, the boundary term has expectation zero and each summand has expectation $\sum_{i,j}\pi_iT_{ij}\log_2(T_{ij}/T_{ji})$. This equals $\sigma$ because $\sum_{i,j}\pi_iT_{ij}\log_2(\pi_i/\pi_j)=\sum_i\pi_i\log_2\pi_i-\sum_j\pi_j\log_2\pi_j=0$. This is the standard identification of entropy production with the relative entropy between forward and reversed path measures \cite{schnakenberg1976,crooks1999,kawai2007,seifert2012}.
+Under stationarity, the boundary term has expectation zero and each summand has expectation $\sum_{i,j}\pi_iT_{ij}\log_2(T_{ij}/T_{ji})$. This equals $\sigma$ because $\sum_{i,j}\pi_iT_{ij}\log_2(\pi_i/\pi_j)=\sum_i\pi_i\log_2\pi_i-\sum_j\pi_j\log_2\pi_j=0$. This is the standard identification of entropy production with the relative entropy between forward and reversed path measures \cite{schnakenberg1976,crooks1999,kawai2007,seifert2012}; in this form, for Markov processes, it is due to Gaspard \cite{gaspard2004}.
 \end{proof}
 
 \begin{remark}[Absolute continuity]
@@ -194,7 +200,7 @@ Reversal preserves entropy rates, $h(P)=h(P^{\mathrm{rev}})$, so representation-
 \begin{equation}\label{eq:estimator}
 \hat\sigma_{n,R} = \frac{1}{n-1}\sum_{t}\log_2\frac{\hat p(y_t\mid y_{t-R:t-1})}{\hat q(y_t\mid y_{t-R:t-1})},
 \end{equation}
-where the first few symbols use shorter contexts. Both predictors are evaluated on the same $y$ used to fit $\hat p$ (an in-sample plug-in estimate, cf.\ \cite{roldanparrondo2010}).
+where the first few symbols use shorter contexts. Both predictors are evaluated on the same $y$ used to fit $\hat p$ (an in-sample plug-in estimate of the Kullback--Leibler divergence studied in \cite{roldanparrondo2010,roldanparrondo2012}).
 
 \begin{proposition}[Consistency for Markov chains]\label{prop:consistency}
 Let $P$ be a stationary irreducible Markov chain with $T_{ij}>0\Leftrightarrow T_{ji}>0$, and let $R\ge 1$. Then $\hat\sigma_{n,R}\to\sigma$ almost surely.
@@ -278,14 +284,14 @@ Code, ancillary data, and scripts are at \url{https://github.com/jbwinters/Evide
 \section*{Discussion}
 The two holonomies answer different questions. Evaluating each representation with its own universal code gives the entropy-rate difference $h(Q)-h(P)$: it is insensitive to the choice of code and detects net compression or expansion, but it vanishes for time reversal. Evaluating the original path under the loop's pushforward law gives the relative-entropy rate $\mathsf{d}(P\|Q)$, which for Markov time reversal is the entropy production rate. The second quantity is the one that captures irreversibility. It requires a consistent model of the reversed process on forward-typical contexts, and a finite-order plug-in estimator supplies one for finite-state Markov chains.
 
-\paragraph{Extensions.} Quantizing a continuous process and observing a Markov chain through a memoryless channel are both instances of \eqref{eq:dpi}. The observed irreversibility rate therefore bounds the underlying entropy production from below \cite{gomezmarin2008}; the quantum analogue follows from the monotonicity of quantum relative entropy \cite{lindblad1975,uhlmann1977}. Turning finite-sample, finite-order estimates into certified bounds would require controlling both the in-sample bias and the order-wise terms $d_R$.
+\paragraph{Extensions.} Quantizing a continuous process and observing a Markov chain through a memoryless channel are both instances of \eqref{eq:dpi}. The observed irreversibility rate therefore bounds the underlying entropy production from below \cite{gomezmarin2008,roldanparrondo2010}; estimators that use waiting times can recover more of it than finite-order transition statistics \cite{martinez2019}; the quantum analogue follows from the monotonicity of quantum relative entropy \cite{lindblad1975,uhlmann1977}. Turning finite-sample, finite-order estimates into certified bounds would require controlling both the in-sample bias and the order-wise terms $d_R$.
 
 \paragraph{Limitations.} The results assume finite alphabets, stationarity, and ergodicity. The consistency result covers finite-state Markov chains; for hidden-state records, the estimator targets the conditional quantities $d_R$, not $\sigma_Z$. Estimates carry a positive finite-sample bias (empirically of order $1/n$) and $O(n^{-1/2})$ fluctuations. The loop formalism organizes these estimators but does not by itself supply new estimators for loops other than time reversal.
 
 \section*{Acknowledgements}
 Portions of the text were drafted or revised with assistance from AI language models (OpenAI's GPT-5 and Anthropic's Claude). The author verified all content and takes full responsibility for the paper.
 
-\begin{thebibliography}{20}
+\begin{thebibliography}{30}
 
 \bibitem{ziv1978}
 J. Ziv and A. Lempel, ``Compression of individual sequences via variable-rate coding,'' \emph{IEEE Trans. Inf. Theory}, 24(5):530--536, 1978.
@@ -331,6 +337,33 @@ G. Lindblad, ``Completely positive maps and entropy inequalities,'' \emph{Commun
 
 \bibitem{uhlmann1977}
 A. Uhlmann, ``Relative entropy and the Wigner--Yanase--Dyson--Lieb concavity in an interpolation theory,'' \emph{Communications in Mathematical Physics}, 54:21--32, 1977.
+
+\bibitem{gaspard2004}
+P. Gaspard, ``Time-reversed dynamical entropy and irreversibility in Markovian random processes,'' \emph{J. Stat. Phys.}, 117:599--615, 2004.
+
+\bibitem{roldanparrondo2012}
+\'E. Rold\'an and J. M. R. Parrondo, ``Entropy production and Kullback--Leibler divergence between stationary trajectories of discrete systems,'' \emph{Phys. Rev. E}, 85:031129, 2012.
+
+\bibitem{zivmerhav1993}
+J. Ziv and N. Merhav, ``A measure of relative entropy between individual sequences with application to universal classification,'' \emph{IEEE Trans. Inf. Theory}, 39(4):1270--1279, 1993.
+
+\bibitem{chazottesredig2005}
+J.-R. Chazottes and F. Redig, ``Testing the irreversibility of a Gibbsian process via hitting and return times,'' \emph{Nonlinearity}, 18:2477--2489, 2005.
+
+\bibitem{cristadoro2023}
+G. Cristadoro, M. Degli Esposti, V. Jak\v{s}i\'c, and R. Raqu\'epas, ``Recurrence times, waiting times and universal entropy production estimators,'' \emph{Lett. Math. Phys.}, 2023; arXiv:2209.09716.
+
+\bibitem{martinez2019}
+I. A. Mart\'inez, G. Bisker, J. M. Horowitz, and J. M. R. Parrondo, ``Inferring broken detailed balance in the absence of observable currents,'' \emph{Nat. Commun.}, 10:3542, 2019.
+
+\bibitem{martiniani2019}
+S. Martiniani, P. M. Chaikin, and D. Levine, ``Quantifying hidden order out of equilibrium,'' \emph{Phys. Rev. X}, 9:011031, 2019.
+
+\bibitem{ro2022}
+S. Ro, B. Guo, A. Shih, T. V. Phan, R. H. Austin, D. Levine, P. M. Chaikin, and S. Martiniani, ``Model-free measurement of local entropy production and extractable work in active matter,'' \emph{Phys. Rev. Lett.}, 129:220601, 2022.
+
+\bibitem{kim2020}
+D.-K. Kim, Y. Bae, S. Lee, and H. Jeong, ``Learning entropy production via neural networks,'' \emph{Phys. Rev. Lett.}, 125:140604, 2020.
 
 \end{thebibliography}
 

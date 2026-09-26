@@ -57,7 +57,17 @@ length per symbol estimates D(P‖P_rev).
   so estimates carry a small positive bias. For reversible chains it shrinks
   roughly as 1/n. Use `uec.battery.bootstrap_klrate` for intervals.
 
-The paper's Section 4 gives the precise statements. On 60 random chains, the
+The paper's Section 4 gives the precise statements.
+
+**Prior work.** None of this is a new estimator. The identity between
+entropy production and the forward/reverse relative-entropy rate is due to
+Gaspard (2004). Estimating it from one trajectory, including with
+compression, follows Roldán & Parrondo (2010, 2012). Universal
+hitting/waiting-time estimators come from Chazottes & Redig (2005) and
+Cristadoro et al. (2023). What this repository adds is a tested
+implementation, a careful account of when the estimate can be trusted, and
+the loop framing in the paper. The paper's "Related work" section has full
+references. On 60 random chains, the
 estimates at n = 2¹⁵ track the analytic σ closely (r = 0.9994):
 
 ![Estimate vs analytic entropy production for 60 random chains](figures/calibration.png)
