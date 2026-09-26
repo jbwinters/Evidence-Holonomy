@@ -3,7 +3,7 @@
 ## 1) Practical/scientific uses
 
 1. **Measuring irreversibility from data**  
-   A single, observer‑agnostic number (bits/step) that quantifies how strongly a process breaks time‑reversal symmetry. Useful in:
+   A single number (bits/step) that quantifies how strongly the observed record breaks time‑reversal symmetry. It depends on what is observed and how it is discretized; for partial observations it bounds the underlying entropy production from below. Useful in:
    - Biophysics (molecular trajectories, ion channels),
    - Materials/fluids (turbulence onset, hysteresis),
    - Markets & operations (regime change, instability detection),

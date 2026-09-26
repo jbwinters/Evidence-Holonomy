@@ -16,7 +16,7 @@ Please credit the original creators and abide by the license terms listed on eac
   - Author: joedeshon
   - Source: https://freesound.org/people/joedeshon/sounds/119023/
 
-- data/wav/349870__axiologus__old-town-singing-with-street-sounds.wav
+- data/wav/349870__axiologus__old-town-singing-with-street-sounds.wav (not bundled: 46 MB; download it from the source page)
   - Author: axiologus
   - Source: https://freesound.org/people/axiologus/sounds/349870/
 

@@ -45,3 +45,13 @@ data/kaggle/**
 
 # Finance scripts (keep local but don't track)
 scripts/finance/
+
+# arXiv packaging output
+arxiv_submission/
+uec_theory_arxiv.tar.gz
+
+# Finance figures (local only, like scripts/finance/)
+figures/price_*
+
+# Large Freesound recording; download it from the link in ATTRIBUTIONS.md
+data/wav/349870__axiologus__old-town-singing-with-street-sounds.wav

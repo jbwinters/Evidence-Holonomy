@@ -44,7 +44,7 @@ This document refines the core assumptions behind UEC/KL‑rate holonomy and tur
 - Check: small jitter shouldn’t wildly change bins; if it does, prefer ordinal patterns or return transforms before discretization.
 
 10) Observational completeness (replaces “no hidden variables”)
-- Equality (holonomy = physical EP) needs observational completeness; otherwise measured holonomy is a certified lower bound (data processing inequality).
+- Equality (holonomy = physical EP) needs observational completeness. Otherwise the KL rate of the observed process is a lower bound on the hidden EP (data processing inequality). A finite-order, finite-sample estimate of that rate is not itself a guaranteed bound: it carries a small positive in-sample bias, and a single order-R term can overshoot (see the paper, Section 4).
 
 ## Practical limitations → remedies
 

@@ -1,187 +1,177 @@
-# UEC Holonomy (uec-holonomy)
+# Evidence Holonomy (uec-holonomy)
 
-Universal Evidence Curvature (UEC): KL-rate holonomy, entropy production estimation, and Arrow-of-Time demos.
+[![CI](https://github.com/jbwinters/Evidence-Holonomy/actions/workflows/ci.yml/badge.svg)](https://github.com/jbwinters/Evidence-Holonomy/actions/workflows/ci.yml)
 
-- KL-rate holonomy estimators that match D(P||Q) on loops of representation.
-- Equality to entropy production for the Markov time-reversal loop (bits/step).
-- A minimal test battery and AoT (Arrow-of-Time) demos for audio, images, video, sensors, and finance.
+Estimate how irreversible a process is from a single discrete trajectory.
+
+The package measures the relative-entropy rate D(P‖P_rev) between a process
+and its time reversal, in bits per step. For a stationary finite-state Markov
+chain this equals the entropy production rate σ. For a record observed
+through a noisy or coarse-grained channel, the observed rate bounds the hidden
+entropy production from below. The paper
+([`uec_theory.pdf`](uec_theory.pdf), source [`uec_theory.tex`](uec_theory.tex))
+frames this as a "holonomy" of evidence around a loop of representation
+transforms, proves the reductions, and reports the numerical checks.
+
+![Estimate vs analytic entropy production for 60 random chains](figures/calibration.png)
+
+*Estimates at n = 2¹⁵ against the analytic σ for 60 random 3- to 5-state
+chains. Reproduce with `scripts/reproduce_all.sh`.*
+
+## What the estimator is
+
+`klrate_holonomy_time_reversal_markov(x, k, R)` fits two Krichevsky–Trofimov
+mixtures over Markov orders 0…R: one to the sequence, one to its literal time
+reversal. It then scores the sequence under both. The difference in code
+length per symbol estimates D(P‖P_rev).
+
+- **Markov chains, R ≥ 1:** consistent for σ. Estimates for different R ≥ 1
+  nearly coincide, because the mixture weights concentrate on the true order.
+- **Hidden-state records:** estimates the observed process's order-R
+  irreversibility, which can be far below the hidden σ, and is zero when the
+  observation is symmetric under reversal.
+- **Finite samples:** both models are scored on the data they were fitted to,
+  so estimates carry a small positive bias. For reversible chains it shrinks
+  roughly as 1/n. Use `uec.battery.bootstrap_klrate` for intervals.
+
+The paper's Section 4 gives the precise statements.
 
 ## Install
 
 ```bash
-pip install uec-holonomy            # (once published)
-# from source (dev extras include tests/lint)
-pip install -e .[dev]
-# optional extras
-pip install -e .[audio]        # SciPy WAV reader
-pip install -e .[image]        # PIL/Pillow for images  
-pip install -e .[video]        # imageio for video
-pip install -e .[all]          # all optional dependencies
+git clone https://github.com/jbwinters/Evidence-Holonomy.git
+cd Evidence-Holonomy
+pip install -e ".[dev]"      # tests and lint
+pip install -e ".[audio]"    # SciPy WAV reader
+pip install -e ".[image]"    # Pillow, for images
+pip install -e ".[video]"    # imageio + ffmpeg, for video
+pip install -e ".[all]"      # every optional dependency
 ```
 
-## CLI
-
-- Battery (core validations):
-
-```bash
-uec-battery --fast         # quick run
-uec-battery --run_suite    # full suite + artifacts
-```
-
-- AoT demos (CSV/WAV/Image/Video, scoreboard):
-
-```bash
-# Audio analysis
-uec-aot --aot_wav data/wav/boiling.wav --aot_bins 32 --aot_win 65536 --aot_stride 32768 --order 5 --aot_diff
-
-# Financial time series
-uec-aot --aot_csv data/kaggle/prices.csv --aot_csv_col Close --aot_logreturn --aot_rate 1
-
-# Image analysis (raster scan)
-uec-aot --aot_image image.png --image_mode raster --aot_bins 16
-
-# Image analysis (patch vector quantization)
-uec-aot --aot_image image.png --image_mode patch --image_vq_k 256 --image_patch 8
-
-# Video analysis (frame-level vector quantization)
-uec-aot --aot_video video.mp4 --video_vq_k 64 --video_down 16 --aot_win 512 --aot_stride 256
-
-# Scoreboard across multiple files
-uec-aot --scoreboard_glob "data/wav/*.wav" --aot_bins 32 --aot_win 65536 --aot_stride 32768 --order 5 --aot_diff
-```
-
-See `uec_theory.tex` for the theory (two holonomies: representation-space vs. observer-transported KL), reductions, and references.
-
-## Analysis Scripts
-
-price UEC analysis and utilities (research-only):
-
-- `python scripts/price_uec_analysis.py [--tail N] [--window W] [--k_r K] [--k_v K] [--uec_method counts|kt]`:
-  - Computes UEC stream (bits/step), z-scores, optional bootstrap CIs, change-points; runs a simple UEC-gated trend backtest.
-  - Outputs: `results/price_uec_analysis.csv`, `results/price_uec_summary.json`.
-
-- `python scripts/uec_diagnostics.py --gauge --surrogate --markov [--ergodic_segments 4] [--jitter_std 0.05]`:
-  - Gauge/surrogate ~ 0 checks, Markov EP vs holonomy, ergodicity probe across segments, measurement jitter robustness.
-
-- `python scripts/uec_sensitivity.py --tail 50000 --k_list 6,8,12,16 --r_list 1,2,3 --method counts`:
-  - Sensitivity grid over discretization and order; outputs `results/uec_sensitivity.csv`.
-
-- `python scripts/uec_multiscale.py --tail 50000 --scales 1,2,4,8`:
-  - Multi-scale spectrum (downsampling) and coarse-grain-loop holonomy; attribution (joint vs returns-only vs volume-only).
-
-- `python scripts/uec_bench.py --tail 20000 --W_list 128,256 --R_list 1,2,3`:
-  - Timing for counts vs KT pipelines.
+Requires Python 3.9+. The package is not on PyPI.
 
 ## Python API
 
 ```python
-# Core holonomy analysis
 from uec.markov import random_markov_biased, sample_markov, entropy_production_rate_bits
 from uec.holonomy import klrate_holonomy_time_reversal_markov
-from uec.aot import aot_from_series
 
 T = random_markov_biased(k=3, delta=0.6)
 x = sample_markov(T, n=150_000)
-print(entropy_production_rate_bits(T))
-print(klrate_holonomy_time_reversal_markov(x, k=3, R=3))
-
-# Image and video analysis
-from uec.adapters import (
-    load_image_gray, image_to_tokens_raster, image_to_tokens_patch_vq,
-    video_to_tokens_vq
-)
-import numpy as np
-
-# Load and tokenize image
-img = load_image_gray("image.png")
-tokens, k = image_to_tokens_raster(img, k=16)
-result = aot_from_series(np.array(tokens), k=k, R=3)
-
-# Load and tokenize video  
-tokens, k, fps, codebook = video_to_tokens_vq("video.mp4", k_codebook=64)
-result = aot_from_series(np.array(tokens), k=k, R=3, sr=fps)
+print(entropy_production_rate_bits(T))                # analytic sigma, bits/step
+print(klrate_holonomy_time_reversal_markov(x, k=3, R=3))  # estimate from x
 ```
 
-## Model Validation Results
+Other entry points:
 
-The holonomy-based Arrow-of-Time analysis has been validated across diverse audio signals, demonstrating correct detection of temporal asymmetries:
+- `uec.holonomy.klrate_holonomy_general`: any loop of transforms from `uec.transforms`.
+- `uec.holonomy.klrate_holonomy_leadlag_markov`: the same estimator at time scale τ.
+- `uec.aot.aot_from_series`: arrow-of-time analysis for real-valued series.
+- `uec.adapters`: tokenizers for images and video.
+- `uec.bio`: surrogates and conditional analyses (experimental).
 
-### Test Signal Results
+## Command line
 
-| Audio Type | AUC | bits/step | bits/second | Interpretation |
-|------------|-----|-----------|-------------|----------------|
-| **Generated White Noise** | 0.495 | ~0 | ~0 | ✅ **Perfectly Reversible** |
-| **Generated Sine Wave** | 0.497 | 5.9×10⁻⁶ | 0.26 | ✅ **Nearly Reversible** |
-| **Generated Chirp** | 0.483 | 1.0×10⁻⁵ | 0.44 | 🔶 **Slightly Irreversible** |
-| **Test WAV Sine** | 0.489 | 1.5×10⁻⁸ | 0.0001 | ✅ **Nearly Reversible** |
-| **Applause** | 0.496 | 7.2×10⁻⁵ | 3.16 | 🔶 **Slightly Irreversible** |
-| **Human Singing** | 0.536 | 1.1×10⁻⁴ | 4.73 | 🔶 **Moderately Irreversible** |
-| **Rain + Traffic** | 0.527 | 2.9×10⁻⁵ | 1.40 | 🔶 **Moderately Irreversible** |
+### `uec-battery`: validate the estimator
 
-**Key Validation Points:**
+```bash
+uec-battery                        # one random chain: analytic EP vs estimate
+uec-battery --core --fast          # core checks (under a minute)
+uec-battery --run_suite            # full battery (about 6 minutes)
+```
 
-1. **Mathematical signals behave as predicted**: White noise and pure sine waves show AUC ≈ 0.5 (reversible), while directional signals like frequency chirps show detectable irreversibility.
+The battery checks:
 
-2. **Real audio complexity correlates with temporal structure**: Human voice shows highest irreversibility (structured speech/melody), environmental sounds show moderate values, pure tones remain nearly reversible.
+- gauge invariance (≈ 0)
+- time reversal against analytic EP: random chains, closed-form rings, reversible and low/high-EP chains
+- agreement with a count-based estimator
+- robustness to R
+- bootstrap coverage
+- negative controls
 
-3. **Entropy production scales with signal complexity**: Simple mathematical signals produce ~0 bits/second, natural sounds produce 1-5 bits/second, structured human sounds show highest values.
+Each check writes a JSON record under `results/` and stops the run if it fails.
 
-These results demonstrate that the holonomy-based approach correctly distinguishes reversible from irreversible temporal processes across both synthetic test cases and real-world audio recordings.
+### `uec-aot`: arrow of time in real data
 
-### Image and Video Validation
+```bash
+# Audio (first differences, 32 quantile bins, order 5)
+uec-aot --aot_wav data/wav/420228__14fpanska_nemec_petr__37-17-boiling-water.wav \
+        --aot_bins 32 --aot_win 65536 --aot_stride 32768 --order 5 --aot_diff --seed 1
 
-The framework has been extended to support images and video with comprehensive validation:
+# Time series in a CSV column, as log-returns
+uec-aot --aot_csv prices.csv --aot_csv_col Close --aot_logreturn --seed 1
 
-**Video Test Results (Synthetic):**
+# Images and video
+uec-aot --aot_image image.png --image_mode raster --aot_bins 16
+uec-aot --aot_video video.mp4 --video_vq_k 64 --video_down 16 --aot_win 512 --aot_stride 256
 
-| Video Type | AUC | Interpretation |
-|------------|-----|----------------|
-| **Static Pattern** | 0.000 | ✅ **Perfect Reversibility** |
-| **Periodic Motion** | 0.598 | 🔶 **Weakly Irreversible** |
-| **Biased Random Walk** | 0.698 | 🔶 **Moderately Irreversible** |
-| **Temporal Gradient** | 0.947 | 🔴 **Highly Irreversible** |
+# Many files at once
+uec-aot --scoreboard_glob "data/wav/*.wav" --aot_diff --scoreboard_csv scoreboard.csv
+```
 
-**Image Analysis Modes:**
-- **Raster scan**: Treats images as 1D sequences via row-major order
-- **Patch VQ**: Vector quantization of image patches for spatial-temporal structure
+The first half of the series trains the forward model and its reversal. The
+second half is split into windows, and each window is compared with its own
+reversal. The output reports:
 
-**Key Features:**
-- Frame-level vector quantization for video temporal analysis
-- Codebook training and reuse across datasets
-- Integration with existing AoT pipeline (bits/step, bits/second)
-- Robust fallbacks when optional dependencies unavailable
+- **AUC:** the probability that a forward window looks more "forward" than a
+  reversed one, with a 95% block-bootstrap interval. 0.5 means no detectable
+  arrow of time. Values toward 1 mean the direction is detectable. Values
+  well below 0.5 point to an artifact, not to reversibility. Single-run AUCs
+  are noisy at small sizes: for i.i.d. noise with 10⁴ samples we observed
+  AUCs from 0.11 to 0.74 across seeds. Read the interval, not the point.
+- **bits/step:** the KL-rate estimate on the held-out half, with a bootstrap interval.
+- **bits/s:** bits/step × the sampling rate. This is a property of the
+  quantized record, not a physical entropy production of the sound source.
+
+[`docs/data.md`](docs/data.md) explains how to fetch data and choose settings.
+Audio samples under `data/wav/` come from Freesound; see
+[`ATTRIBUTIONS.md`](ATTRIBUTIONS.md). `scripts/generate_test_wav.py` and
+`scripts/generate_test_videos.py` create synthetic test signals.
+
+## Reproducing the paper
+
+```bash
+pip install -e ".[paper]"
+scripts/reproduce_all.sh
+```
+
+This regenerates:
+
+- `anc/*.csv` (via `scripts/paper_experiments.py`)
+- `tables/`
+- `figures/`
+- `uec_theory.pdf`, when LaTeX is installed
+
+Every number and figure in the paper comes from these files.
+`scripts/package_arxiv.sh` builds an arXiv source bundle.
+
+## Repository layout
+
+```
+src/uec/            package: markov, coders, transforms, holonomy, aot, adapters, bio, battery, cli
+tests/              pytest suite (run: pytest -q)
+scripts/            paper experiments, tables, figures, packaging, test-signal generators
+scripts/analysis/   diagnostics for real data (gauge, surrogate, Markov, ergodicity checks)
+anc/, tables/, figures/   paper data, tables, and figures
+experiments/quantum/      exploratory quantum-channel simulations (not part of the paper)
+docs/               assumptions and practical checks, data guide, diagnostics plan
+background/         motivation, related work, and speculative notes
+data/wav/           small audio samples for demos
+```
 
 ## Development
 
-Run tests:
-
 ```bash
+pip install -e ".[dev,audio,image,ml]"
+ruff check src tests
 pytest -q
 ```
 
-Package layout:
-
-```
-src/uec/
-  markov.py      # transitions, stationary, EP, HMM, ring EP
-  coders.py      # KT mixture (frozen), LZ78
-  transforms.py  # recode, coarse-grain, time-reversal, transitions, (down/up)-sample
-  holonomy.py    # KL-rate estimators and time-reversal loop
-  aot.py         # AoT pipeline (discretize → train(P,Q) → scores & CI)
-  adapters.py    # image/video tokenization (raster, patch VQ, frame VQ)
-  cli.py         # console entry points: uec-battery, uec-aot
-```
-
-CI: GitHub Actions runs tests on 3.9–3.11. Publishing to PyPI happens on release tag; add `PYPI_API_TOKEN` to repo secrets.
+CI runs both on Python 3.9–3.12. Before trusting a result on real data, read
+[`docs/assumptions.md`](docs/assumptions.md). It covers the assumptions
+(finite alphabet, stationarity, ergodicity, enough data for the chosen order,
+absolute continuity) and how to check each one.
 
 ## License
 
-Code is licensed under MIT. Text, figures, and conceptual content are licensed under CC-BY 4.0 — please cite when reusing.
-
-## Attributions
-
-Audio samples under `data/wav/` are from Freesound.org and used for AoT demos. See `ATTRIBUTIONS.md` for links and author credits. Please abide by the license terms on each Freesound page.
-
-## Assumptions and Safe Operation
-
-See `docs/assumptions.md` for refined theoretical assumptions (finite alphabet, stationarity, ergodicity, sufficiency, loop closure) and practical “Check / Work‑around / Relax” guidance.
+Code: MIT. Text, figures, and other non-code content: CC BY 4.0. See [`LICENSE`](LICENSE).
