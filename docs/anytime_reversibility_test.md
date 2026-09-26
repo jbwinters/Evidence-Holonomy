@@ -16,7 +16,7 @@ from a recording and ask whether it is clearly above zero.
 The trouble is that people check as the data come in. A classical
 likelihood-ratio test that is correct at a planned sample size stops being
 correct when it is checked repeatedly: in our runs on reversible chains its
-false-alarm rate rose from 5% to 24–36% when checked 10 times and 44–60% when checked at every checkpoint.
+false-alarm rate rose from 5% to 23.9–35.5% when checked 10 times and 44.5–59.8% when checked at all 221 checkpoints from step 100.
 
 This note contributes three things.
 
@@ -29,13 +29,19 @@ This note contributes three things.
    It is not σ: ρ ≤ σ/2, ρ ≈ σ/4 near equilibrium, and ρ stays finite when σ
    is infinite. This yields a lower bound of about log2(1/α)/ρ on the
    expected detection time of any level-α sequential test.
+
+   The detection-time bound is the reversible-null case of a general
+   result by Sethi et al. (arXiv:2602.17587, 2026) for composite Markov
+   nulls; the nearest reversible chain is due to Wolfer & Watanabe (2021).
+   What is new here is the closed form ρ for this null and its relation
+   to σ.
 2. **A likelihood e-process that attains ρ.** It uses the running-MLE
    universal-inference construction. It is valid at every sample size and
    grows at exactly rate ρ. Its model-selection overhead makes it slow at
    practical α, though.
 3. **A loop-orientation test.** Under detailed balance, every loop the
    chain makes is as likely as its reversal, so each loop's direction is a
-   fair coin. Betting on loop directions gives a test with exact validity
+   fair coin. Betting on loop directions gives a test with non-asymptotic validity
    under continuous monitoring, no constrained optimization, and little
    overhead. Near equilibrium, the hard regime, it captures 92–100% of
    the optimal rate ρ.

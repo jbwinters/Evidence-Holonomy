@@ -16,7 +16,9 @@ discrete trajectory.
 The paper ([`uec_theory.pdf`](uec_theory.pdf), source
 [`uec_theory.tex`](uec_theory.tex)) shows that no test can detect broken
 detailed balance faster than ρ bits per step, the divergence to the nearest
-reversible chain; this is at most σ/2, and about σ/4 near equilibrium. It
+reversible chain; this is at most σ/2, and about σ/4 near equilibrium. The
+general lower bound is due to Sethi et al. (2026); the paper evaluates it
+in closed form for this null. It
 presents tests that reach or approach that rate, with seeded experiments.
 The estimator and the earlier "evidence holonomy" framing are in its
 appendices.
