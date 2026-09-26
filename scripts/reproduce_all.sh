@@ -13,13 +13,18 @@ echo "Date:   $(date)"
 echo "=== 1. Experiments (anc/*.csv) ==="
 python scripts/paper_experiments.py
 
-echo "=== 2. Tables and summary statistics ==="
+echo "=== 2. Anytime-valid tests (anc/seq_*.csv; the slowest step, tens of minutes) ==="
+python scripts/sequential_experiments.py
+
+echo "=== 3. Tables and summary statistics ==="
 python scripts/summarize.py
+python scripts/sequential_tables.py
 
-echo "=== 3. Figures ==="
+echo "=== 4. Figures ==="
 python scripts/plot_results.py
+python scripts/plot_sequential.py
 
-echo "=== 4. Paper ==="
+echo "=== 5. Paper ==="
 if command -v latexmk >/dev/null 2>&1; then
   latexmk -pdf -interaction=nonstopmode -quiet uec_theory.tex
   latexmk -c -quiet uec_theory.tex

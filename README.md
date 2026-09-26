@@ -2,16 +2,24 @@
 
 [![CI](https://github.com/jbwinters/Evidence-Holonomy/actions/workflows/ci.yml/badge.svg)](https://github.com/jbwinters/Evidence-Holonomy/actions/workflows/ci.yml)
 
-Estimate how irreversible a process is from a single discrete trajectory.
+Detect and measure irreversibility (broken detailed balance) from a single
+discrete trajectory.
 
-The package measures the relative-entropy rate D(P‖P_rev) between a process
-and its time reversal, in bits per step. For a stationary finite-state Markov
-chain this equals the entropy production rate σ. For a record observed
-through a noisy or coarse-grained channel, the observed rate bounds the hidden
-entropy production from below. The paper
-([`uec_theory.pdf`](uec_theory.pdf), source [`uec_theory.tex`](uec_theory.tex))
-frames this as a "holonomy" of evidence around a loop of representation
-transforms, proves the reductions, and reports the numerical checks.
+- **Test, as data arrive.** `uec.sequential` provides tests of detailed
+  balance that stay valid when checked after every observation. The
+  loop-orientation test bets on the direction of each loop the chain makes;
+  under equilibrium every direction is a fair coin.
+- **Measure.** `uec.holonomy` estimates the relative-entropy rate
+  D(P‖P_rev) between a process and its time reversal. For a stationary
+  Markov chain this equals the entropy production rate σ.
+
+The paper ([`uec_theory.pdf`](uec_theory.pdf), source
+[`uec_theory.tex`](uec_theory.tex)) shows that no test can detect broken
+detailed balance faster than ρ bits per step, the divergence to the nearest
+reversible chain; this is at most σ/2, and about σ/4 near equilibrium. It
+presents tests that reach or approach that rate, with seeded experiments.
+The estimator and the earlier "evidence holonomy" framing are in its
+appendices.
 
 ![A biased and an unbiased three-state ring, each played forward and backward, with the running estimate](figures/forward_vs_reverse.gif)
 
@@ -72,10 +80,11 @@ estimates at n = 2¹⁵ track the analytic σ closely (r = 0.9994):
 
 ![Estimate vs analytic entropy production for 60 random chains](figures/calibration.png)
 
-## Research note: testing for equilibrium as data arrive
+## Testing for equilibrium as data arrive
 
-[`docs/anytime_reversibility_test.md`](docs/anytime_reversibility_test.md)
-develops tests of detailed balance that stay valid when checked after
+The paper's main result; a longer research note with the full evidence
+trail is [`docs/anytime_reversibility_test.md`](docs/anytime_reversibility_test.md).
+It develops tests of detailed balance that stay valid when checked after
 every observation. It covers three results:
 
 - the optimal detection rate, which is ρ (the distance to the nearest
