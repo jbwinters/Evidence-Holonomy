@@ -7,7 +7,7 @@ name = "uec-holonomy"
 version = "0.1.0"
 description = "Universal Evidence Curvature (UEC): KL-rate holonomy, entropy production estimation, and Arrow-of-Time demos"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 authors = [
   { name = "Josh Winters", email = "josh@friendmachine.co" }
 ]
@@ -15,7 +15,6 @@ keywords = ["entropy production", "information theory", "universal coding", "hol
 classifiers = [
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
-  "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
@@ -55,7 +54,7 @@ markers = ["slow: longer statistical checks"]
 
 [tool.ruff]
 line-length = 120
-target-version = "py39"
+target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F"]

@@ -111,7 +111,7 @@ pip install -e ".[video]"    # imageio + ffmpeg, for video
 pip install -e ".[all]"      # every optional dependency
 ```
 
-Requires Python 3.9+. The package is not on PyPI.
+Requires Python 3.10+. The package is not on PyPI.
 
 ## Python API
 
@@ -231,7 +231,7 @@ ruff check src tests
 pytest -q
 ```
 
-CI runs both on Python 3.9–3.12. Before trusting a result on real data, read
+CI runs both on Python 3.10–3.12. Before trusting a result on real data, read
 [`docs/assumptions.md`](docs/assumptions.md). It covers the assumptions
 (finite alphabet, stationarity, ergodicity, enough data for the chosen order,
 absolute continuity) and how to check each one.
